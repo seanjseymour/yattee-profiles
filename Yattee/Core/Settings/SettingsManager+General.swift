@@ -624,7 +624,7 @@ extension SettingsManager {
 
     /// Whether URL scheme actions that change saved state (queue, bookmark,
     /// download, subscribe) run without asking first. Off by default: any web
-    /// page can open a yattee:// link. Local-only, like `defaultLinkAction`.
+    /// page can open a yatteeprofiles:// link. Local-only, like `defaultLinkAction`.
     var linkActionsRunWithoutConfirmation: Bool {
         get {
             if let cached = _linkActionsRunWithoutConfirmation { return cached }

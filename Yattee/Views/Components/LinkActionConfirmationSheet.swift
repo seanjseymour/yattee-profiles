@@ -3,7 +3,7 @@
 //  Yattee
 //
 //  Asks before a URL scheme action changes saved state. Any web page can open
-//  a yattee:// link, so queueing, bookmarking, downloading and subscribing
+//  a yatteeprofiles:// link, so queueing, bookmarking, downloading and subscribing
 //  wait for the user unless Settings allows them to run on their own.
 //
 

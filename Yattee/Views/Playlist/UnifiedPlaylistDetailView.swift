@@ -1421,7 +1421,7 @@ struct UnifiedPlaylistDetailView: View {
 
     private func playlistShareURL() -> URL {
         guard let remotePlaylist else {
-            return URL(string: "yattee://playlist")!
+            return URL(string: "yatteeprofiles://playlist")!
         }
 
         switch remotePlaylist.id.source {
@@ -1432,7 +1432,7 @@ struct UnifiedPlaylistDetailView: View {
         case .extracted(_, let originalURL):
             return originalURL
         case nil:
-            return URL(string: "yattee://playlist/\(remotePlaylist.id.playlistID)")!
+            return URL(string: "yatteeprofiles://playlist/\(remotePlaylist.id.playlistID)")!
         }
     }
 

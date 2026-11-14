@@ -526,7 +526,7 @@ struct YatteeApp: App {
     /// Handle incoming deep link URLs.
     private func handleDeepLink(_ url: URL) {
         let router = URLRouter()
-        // Resolve yattee://open?url=… wrappers first so timestamp parsing and
+        // Resolve yatteeprofiles://open?url=… wrappers first so timestamp parsing and
         // sheet prefill below see the real link, not the wrapper.
         let url = router.unwrapped(url)
         guard let destination = router.route(url) else { return }

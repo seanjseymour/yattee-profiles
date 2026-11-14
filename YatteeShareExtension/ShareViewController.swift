@@ -82,7 +82,7 @@ class ShareViewController: UIViewController {
 
     private func openInYattee(url: URL) {
         guard let encodedURL = url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let yatteeURL = URL(string: "yattee://open?url=\(encodedURL)") else {
+              let yatteeURL = URL(string: "yatteeprofiles://open?url=\(encodedURL)") else {
             close()
             return
         }

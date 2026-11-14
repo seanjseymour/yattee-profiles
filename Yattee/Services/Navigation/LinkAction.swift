@@ -4,19 +4,19 @@
 //
 //  URL scheme actions: links that do something rather than open a screen.
 //
-//    yattee://play?url={link}&t={seconds}
-//    yattee://play-next?url={link}
-//    yattee://queue?url={link}
-//    yattee://download?url={link}
-//    yattee://bookmark?url={link}
-//    yattee://subscribe?url={channel link}
-//    yattee://unsubscribe?url={channel link}
-//    yattee://player/play | pause | toggle | next | previous | close
-//    yattee://player/seek?t={seconds} | seek?by={±seconds}
-//    yattee://player/rate?value={rate}
-//    yattee://player/state  (reports what is playing; for x-callback-url)
+//    yatteeprofiles://play?url={link}&t={seconds}
+//    yatteeprofiles://play-next?url={link}
+//    yatteeprofiles://queue?url={link}
+//    yatteeprofiles://download?url={link}
+//    yatteeprofiles://bookmark?url={link}
+//    yatteeprofiles://subscribe?url={channel link}
+//    yatteeprofiles://unsubscribe?url={channel link}
+//    yatteeprofiles://player/play | pause | toggle | next | previous | close
+//    yatteeprofiles://player/seek?t={seconds} | seek?by={±seconds}
+//    yatteeprofiles://player/rate?value={rate}
+//    yatteeprofiles://player/state  (reports what is playing; for x-callback-url)
 //
-//  Each also works as x-callback-url — yattee://x-callback-url/{verb}?…
+//  Each also works as x-callback-url — yatteeprofiles://x-callback-url/{verb}?…
 //  &x-success=…&x-error=…&x-cancel=… — see `XCallback`.
 //
 //  `url` may be percent-encoded or raw; a raw link keeps its own query
@@ -83,11 +83,11 @@ struct LinkActionParser {
     ]
 
     func parse(_ url: URL) -> LinkAction? {
-        // yattee://x-callback-url/{verb}… is yattee://{verb}… plus callbacks
+        // yatteeprofiles://x-callback-url/{verb}… is yatteeprofiles://{verb}… plus callbacks
         if url.host?.lowercased() == XCallback.host {
             return XCallback.actionURL(from: url).flatMap(parse)
         }
-        guard url.scheme?.lowercased() == "yattee",
+        guard url.scheme?.lowercased() == "yatteeprofiles",
               let host = url.host?.lowercased(), Self.hosts.contains(host) else {
             return nil
         }
@@ -147,7 +147,7 @@ struct LinkActionParser {
         }
     }
 
-    /// The wrapped link: http(s) or a yattee:// screen link, never a local file.
+    /// The wrapped link: http(s) or a yatteeprofiles:// screen link, never a local file.
     private static func targetURL(_ raw: String) -> URL? {
         // A raw link keeps its percent-escapes; an encoded one is decoded once.
         let string = raw.contains("://") ? raw : (raw.removingPercentEncoding ?? raw)
@@ -155,10 +155,10 @@ struct LinkActionParser {
         return url
     }
 
-    /// Links actions may act on: web links and yattee:// screen links.
+    /// Links actions may act on: web links and yatteeprofiles:// screen links.
     static func isAllowedTarget(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased() else { return false }
-        return ["http", "https", "yattee"].contains(scheme)
+        return ["http", "https", "yatteeprofiles"].contains(scheme)
     }
 
     /// Splits the query on `&`, but keeps an unencoded `url=` value whole:

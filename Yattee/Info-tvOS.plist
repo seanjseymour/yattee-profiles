@@ -6,7 +6,7 @@
 	<false/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>stream.yattee.app.feedRefresh</string>
+		<string>com.seanjseymour.yatteeprofiles.feedRefresh</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -14,10 +14,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>stream.yattee.app</string>
+			<string>com.seanjseymour.yatteeprofiles</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>yattee</string>
+				<string>yatteeprofiles</string>
 			</array>
 		</dict>
 	</array>
@@ -35,7 +35,7 @@
 	</array>
 	<key>NSUserActivityTypes</key>
 	<array>
-		<string>stream.yattee.app.activity</string>
+		<string>com.seanjseymour.yatteeprofiles.activity</string>
 	</array>
 	<key>YatteeCloudKitEnvironment</key>
 	<string>$(CLOUDKIT_ENV)</string>

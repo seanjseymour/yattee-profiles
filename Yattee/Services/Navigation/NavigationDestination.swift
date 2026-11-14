@@ -154,7 +154,7 @@ extension NavigationDestination {
 
 /// What a downloads destination shows on tvOS, which has no downloads.
 ///
-/// Reachable on tvOS through `yattee://downloads`. Without a focusable element
+/// Reachable on tvOS through `yatteeprofiles://downloads`. Without a focusable element
 /// the focus engine has nowhere to land and the remote is stuck, so it carries
 /// a Done that pops it.
 private struct TVDownloadsUnavailableView: View {

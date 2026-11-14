@@ -4,7 +4,7 @@ import Foundation
 enum AppIdentifiers {
     // MARK: - Base Identifier
 
-    static let bundleIdentifier = "stream.yattee.app"
+    static let bundleIdentifier = "com.seanjseymour.yatteeprofiles"
 
     // MARK: - iCloud
 
@@ -37,7 +37,7 @@ enum AppIdentifiers {
 
     // MARK: - URL Sessions
 
-    static let downloadSession = "stream.yattee.downloads"
+    static let downloadSession = "com.seanjseymour.yatteeprofiles.downloads"
 
     // MARK: - Logging
 

@@ -1,0 +1,96 @@
+name: tvOS simulator baseline
+
+# Deliberately manual: no signing credentials, deployment, or automatic runs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tvos-simulator-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build unsigned tvOS simulator app
+    runs-on: xcode-27
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      CI_OUTPUT: ${{ runner.temp }}/yattee-ci-output
+      DERIVED_DATA: ${{ runner.temp }}/yattee-derived-data
+      PACKAGE_CACHE: ${{ runner.temp }}/yattee-source-packages
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify toolchain and project
+        run: |
+          set -euo pipefail
+          mkdir -p "$CI_OUTPUT"
+          # Fail clearly if the hosted image no longer contains this stable Xcode.
+          test -d "$DEVELOPER_DIR"
+          test -f Yattee.xcodeproj/project.pbxproj
+          test -f Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          {
+            sw_vers
+            uname -m
+            git rev-parse HEAD
+            xcodebuild -version
+            xcodebuild -showsdks
+          } 2>&1 | tee "$CI_OUTPUT/toolchain.log"
+
+      - name: Resolve pinned Swift packages
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project Yattee.xcodeproj \
+            -scheme Yattee \
+            -destination 'generic/platform=tvOS Simulator' \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            2>&1 | tee "$CI_OUTPUT/packages.log"
+          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Build simulator application and Top Shelf extension
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Yattee.xcodeproj \
+            -scheme Yattee \
+            -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+            -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -resultBundlePath "$CI_OUTPUT/tvos-build.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/build.log"
+
+      - name: Summarize scope
+        if: always()
+        run: |
+          {
+            echo '## tvOS simulator baseline'
+            echo '- Unsigned build only. No TestFlight upload or Apple account access.'
+            echo '- No simulator launch, UI tests, physical-device tests, or playback verification.'
+            echo '- Inspect the build step outcome and attached diagnostics before calling the build successful.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tvos-simulator-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yattee-ci-output
+          if-no-files-found: warn
+          retention-days: 7

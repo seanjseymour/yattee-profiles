@@ -457,12 +457,12 @@ struct InstanceDetectorParsingTests {
 
     @Test("Detection logic - Yattee Server identification")
     func yatteeServerIdentification() {
-        // Name contains "yattee" (case insensitive)
+        // Name contains "yatteeprofiles" (case insensitive)
         let yatteeServer = "Yattee Server"
-        #expect(yatteeServer.lowercased().contains("yattee") == true)
+        #expect(yatteeServer.lowercased().contains("yatteeprofiles") == true)
 
         let otherServer = "Some Other Server"
-        #expect(otherServer.lowercased().contains("yattee") == false)
+        #expect(otherServer.lowercased().contains("yatteeprofiles") == false)
     }
 
     @Test("Detection logic - Invidious identification")

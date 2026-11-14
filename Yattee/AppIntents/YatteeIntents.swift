@@ -3,7 +3,7 @@
 //  Yattee
 //
 //  Shortcuts and Siri actions. Each runs the same `LinkAction` as the matching
-//  yattee:// link, without the confirmation sheet: the person built the
+//  yatteeprofiles:// link, without the confirmation sheet: the person built the
 //  shortcut, so no web page can trigger it behind their back.
 //
 //  Intent type names, AppEnum raw values and App Shortcut phrases are stored

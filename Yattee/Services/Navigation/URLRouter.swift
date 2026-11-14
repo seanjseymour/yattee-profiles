@@ -14,7 +14,7 @@ struct URLRouter: Sendable {
 
     /// Route a URL only if we are *confident* the app can handle it natively —
     /// YouTube/PeerTube video/channel/playlist, direct media (mp4/m3u8/etc),
-    /// or the custom `yattee://` scheme. Unlike `route(_:)` this deliberately
+    /// or the custom `yatteeprofiles://` scheme. Unlike `route(_:)` this deliberately
     /// skips the `.externalVideo` yt-dlp fallback, which matches almost any
     /// http/https URL and is therefore unsafe to trigger blindly after
     /// resolving a URL shortener.
@@ -26,12 +26,12 @@ struct URLRouter: Sendable {
 
     /// Route a URL to a navigation destination.
     func route(_ url: URL) -> NavigationDestination? {
-        // Resolve yattee://open?url=… wrappers up front so every caller gets the
+        // Resolve yatteeprofiles://open?url=… wrappers up front so every caller gets the
         // inner URL intact (including its own `&t=` / `&list=` query items).
         let url = unwrapped(url)
 
         // Try custom scheme first
-        if url.scheme?.lowercased() == "yattee" {
+        if url.scheme?.lowercased() == "yatteeprofiles" {
             return parseCustomScheme(url)
         }
 
@@ -125,7 +125,7 @@ struct URLRouter: Sendable {
 
     // MARK: - Wrapper Unwrapping
 
-    /// Resolve a `yattee://open?url={encoded_url}` wrapper (share extension) to the inner URL.
+    /// Resolve a `yatteeprofiles://open?url={encoded_url}` wrapper (share extension) to the inner URL.
     /// Returns the input unchanged for any other URL. The wrapper's query holds the full
     /// original link, so timestamp parsing must run against the unwrapped URL.
     ///
@@ -133,7 +133,7 @@ struct URLRouter: Sendable {
     /// intact - URLComponents would split the inner URL's own query into separate wrapper
     /// items (losing e.g. `&t=120`), so take the raw remainder after `?url=` instead.
     func unwrapped(_ url: URL) -> URL {
-        guard url.scheme?.lowercased() == "yattee", url.host == "open",
+        guard url.scheme?.lowercased() == "yatteeprofiles", url.host == "open",
               let range = url.absoluteString.range(of: "?url=") else {
             return url
         }
@@ -143,7 +143,7 @@ struct URLRouter: Sendable {
             return url
         }
         // Unwrap once more in case the wrapper was itself wrapped
-        if innerURL.scheme?.lowercased() == "yattee", innerURL.host == "open", innerURL != url {
+        if innerURL.scheme?.lowercased() == "yatteeprofiles", innerURL.host == "open", innerURL != url {
             return unwrapped(innerURL)
         }
         return innerURL
@@ -210,7 +210,7 @@ struct URLRouter: Sendable {
 
     // MARK: - Custom Scheme
 
-    /// Parse yattee:// scheme URLs.
+    /// Parse yatteeprofiles:// scheme URLs.
     private func parseCustomScheme(_ url: URL) -> NavigationDestination? {
         guard let host = url.host?.lowercased() else { return parseLegacyScheme(url) }
 
@@ -218,7 +218,7 @@ struct URLRouter: Sendable {
 
         switch host {
         case "video":
-            // yattee://video/{videoId}?source={source}&instance={url}
+            // yatteeprofiles://video/{videoId}?source={source}&instance={url}
             let videoID = url.lastPathComponent
             guard !videoID.isEmpty else { return nil }
 
@@ -233,7 +233,7 @@ struct URLRouter: Sendable {
             return .video(.id(.global(videoID)))
 
         case "channel":
-            // yattee://channel/{channelId}?source={source}&instance={url}
+            // yatteeprofiles://channel/{channelId}?source={source}&instance={url}
             let channelID = url.lastPathComponent
             guard !channelID.isEmpty else { return nil }
 
@@ -250,9 +250,9 @@ struct URLRouter: Sendable {
             return .channel(channelID, source)
 
         case "playlist":
-            // yattee://playlist/{playlistId}?source={source}&instance={url}
+            // yatteeprofiles://playlist/{playlistId}?source={source}&instance={url}
             let playlistID = url.lastPathComponent
-            // yattee://playlist?list=… is the 1.x form
+            // yatteeprofiles://playlist?list=… is the 1.x form
             guard !playlistID.isEmpty, playlistID != "/" else { return parseLegacyScheme(url) }
 
             let sourceParam = components?.queryItems?.first(where: { $0.name == "source" })?.value
@@ -267,7 +267,7 @@ struct URLRouter: Sendable {
             return .playlist(.remote(PlaylistID(source: source, playlistID: playlistID), instance: nil))
 
         case "search":
-            // yattee://search?q={query}
+            // yatteeprofiles://search?q={query}
             guard let query = components?.queryItems?.first(where: { $0.name == "q" })?.value,
                   !query.isEmpty else {
                 return nil
@@ -275,69 +275,69 @@ struct URLRouter: Sendable {
             return .search(query)
 
         case "playlists":
-            // yattee://playlists
+            // yatteeprofiles://playlists
             return .playlists
 
         case "bookmarks":
-            // yattee://bookmarks
+            // yatteeprofiles://bookmarks
             return .bookmarks
 
         case "history":
-            // yattee://history
+            // yatteeprofiles://history
             return .history
 
         case "downloads":
-            // yattee://downloads
+            // yatteeprofiles://downloads
             return .downloads
 
         case "channels":
-            // yattee://channels (manage subscribed channels)
+            // yatteeprofiles://channels (manage subscribed channels)
             return .manageChannels
 
         case "subscriptions":
-            // yattee://subscriptions
+            // yatteeprofiles://subscriptions
             return .subscriptionsFeed
 
         case "continue-watching":
-            // yattee://continue-watching
+            // yatteeprofiles://continue-watching
             return .continueWatching
 
         case "settings":
-            // yattee://settings
+            // yatteeprofiles://settings
             return .settings
 
         case "open":
-            // yattee://open?url={encoded_url} - from share extension. `route()` unwraps
+            // yatteeprofiles://open?url={encoded_url} - from share extension. `route()` unwraps
             // well-formed wrappers before getting here; this is a wrapper with no
             // usable inner URL.
             return nil
 
         default:
-            // Action hosts (yattee://play, yattee://player/…) are LinkActionParser's
+            // Action hosts (yatteeprofiles://play, yatteeprofiles://player/…) are LinkActionParser's
             if LinkActionParser.hosts.contains(host) { return nil }
             return parseLegacyScheme(url)
         }
     }
 
-    /// Yattee 1.x accepted any web link with its scheme swapped for `yattee://`
-    /// (`yattee://youtube.com/watch?v=…`, `yattee://https://youtu.be/…`) and bare
-    /// paths (`yattee://watch?v=…`). Shortcuts and automations built for 1.x still
+    /// Yattee 1.x accepted any web link with its scheme swapped for `yatteeprofiles://`
+    /// (`yatteeprofiles://youtube.com/watch?v=…`, `yatteeprofiles://https://youtu.be/…`) and bare
+    /// paths (`yatteeprofiles://watch?v=…`). Shortcuts and automations built for 1.x still
     /// send these, so rewrite them to https and route them as web links.
     private func parseLegacyScheme(_ url: URL) -> NavigationDestination? {
         let absolute = url.absoluteString
         guard let separator = absolute.range(of: "://") else { return nil }
         var remainder = String(absolute[separator.upperBound...])
 
-        // yattee://https://… — the original URL was appended whole
+        // yatteeprofiles://https://… — the original URL was appended whole
         if remainder.lowercased().hasPrefix("https://") || remainder.lowercased().hasPrefix("http://") {
             return routeLegacyWebURL(remainder)
         }
-        // yattee://https//… — some URL encoders drop the colon
+        // yatteeprofiles://https//… — some URL encoders drop the colon
         for prefix in ["https//", "http//"] where remainder.lowercased().hasPrefix(prefix) {
             remainder = String(remainder.dropFirst(prefix.count))
         }
 
-        // yattee://watch?v=…, yattee://shorts/…, yattee://playlist?list=… — bare YouTube paths
+        // yatteeprofiles://watch?v=…, yatteeprofiles://shorts/…, yatteeprofiles://playlist?list=… — bare YouTube paths
         let host = remainder.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
         if !host.contains(".") {
             return routeLegacyWebURL("https://www.youtube.com/\(remainder)")
@@ -346,8 +346,8 @@ struct URLRouter: Sendable {
     }
 
     /// Only accept rewritten legacy links that resolve to something Yattee handles
-    /// natively — never the yt-dlp catch-all, so `yattee://anything` stays a no-op.
-    /// PeerTube-shaped paths (`yattee://host.tld/w/{id}`) pass too, as they do as web links.
+    /// natively — never the yt-dlp catch-all, so `yatteeprofiles://anything` stays a no-op.
+    /// PeerTube-shaped paths (`yatteeprofiles://host.tld/w/{id}`) pass too, as they do as web links.
     private func routeLegacyWebURL(_ string: String) -> NavigationDestination? {
         guard let webURL = URL(string: string), isHTTPURL(webURL) else { return nil }
         return routeConfidently(webURL)
