@@ -21,14 +21,20 @@ jobs:
         shell: bash
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
-      CI_OUTPUT: ${{ runner.temp }}/yattee-ci-output
-      DERIVED_DATA: ${{ runner.temp }}/yattee-derived-data
-      PACKAGE_CACHE: ${{ runner.temp }}/yattee-source-packages
     steps:
       - name: Check out selected revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+
+      - name: Initialize runner-local paths
+        run: |
+          set -euo pipefail
+          {
+            echo "CI_OUTPUT=$RUNNER_TEMP/yattee-ci-output"
+            echo "DERIVED_DATA=$RUNNER_TEMP/yattee-derived-data"
+            echo "PACKAGE_CACHE=$RUNNER_TEMP/yattee-source-packages"
+          } >> "$GITHUB_ENV"
 
       - name: Verify toolchain and project
         run: |
