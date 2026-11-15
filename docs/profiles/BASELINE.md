@@ -1,11 +1,14 @@
-# Yattee Profiles baseline (not built or signed yet)
+# Yattee Profiles baseline
 
-Proposed fork: seanjseymour/yattee-profiles (creation not verified).
+Fork: seanjseymour/yattee-profiles.
 
 Upstream: tag 2.0.0-beta.278, commit 71b3b2cce53cdf5c5b0ebd83f771d938f9e7264c.
 
-This branch has applied the identity-isolation transform using the proposed
-com.seanjseymour.yatteeprofiles bundle ID. Apple registration remains unverified. No profile feature has been added.
+The fork uses com.seanjseymour.yatteeprofiles. Internal TestFlight builds 278 and
+279 have been uploaded. Build 278 has a server-detection regression; the local
+Debug fix passed server connection, source persistence, and playback on Apple TV.
+Build 279 is Testing in TestFlight; its device playback has not been separately
+reported. No profile feature has been added.
 For a fresh upstream baseline, the reproducible transform is:
 
     python3 scripts/configure_profiles.py --bundle-id YOUR.REVERSE.DNS.ID
@@ -44,7 +47,8 @@ be initialized/tested and deployed to Production before enabling sync in a
 distributed build. A local-only build would need an explicit, tested feature gate
 covering CloudKit startup and UI, not just entitlement removal.
 
-A CI collaborator is preparing a separate tvOS-only manual upload path. Do not use
+The selected cloud release path is [GitHub Actions](GITHUB_ACTIONS.md), with a
+manual trigger and internal-only upload. Xcode Cloud onboarding failed with code 5. Do not use
 the inherited Fastlane workflow unmodified: it queries build numbers on multiple
 platforms and the default beta lane may distribute externally. Keep signing keys
 in approved secret storage, never code or this metadata file.

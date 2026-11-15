@@ -28,8 +28,22 @@ def plan(root, bundle_id, scheme):
             old = path.read_text()
             new = old.replace(UPSTREAM_ID, bundle_id)
             # Keep parsers, generated Top Shelf URLs, and their tests in agreement.
-            new = new.replace('yattee://', scheme + '://').replace('"yattee"', '"' + scheme + '"')
-            new = new.replace('<string>yattee</string>', '<string>' + scheme + '</string>')
+            new = new.replace('yattee://', scheme + '://')
+            # Only rewrite URL-scheme expressions, never backend identity strings.
+            if path.suffix == ".swift":
+                new = re.sub(
+                    r'(\.scheme(?:\?\.lowercased\(\))?\s*(?:==|=)\s*)"yattee"',
+                    lambda match: match[1] + '"' + scheme + '"', new,
+                )
+                new = new.replace('["http", "https", "yattee"].contains(scheme)',
+                                  '["http", "https", "' + scheme + '"].contains(scheme)')
+            if path.suffix == ".plist":
+                new = re.sub(
+                    r'(<key>CFBundleURLSchemes</key>\s*<array>)(.*?)(</array>)',
+                    lambda match: match[1] + match[2].replace(
+                        '<string>yattee</string>', '<string>' + scheme + '</string>'
+                    ) + match[3], new, flags=re.DOTALL,
+                )
             new = new.replace('"stream.yattee.downloads"', '"' + bundle_id + '.downloads"')
             if path == project:
                 new = new.replace("DEVELOPMENT_TEAM = " + UPSTREAM_TEAM, 'DEVELOPMENT_TEAM = "$(YATTEE_PROFILES_TEAM)"')
