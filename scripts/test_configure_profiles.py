@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static identity-transform regression tests; does not mutate the working tree."""
 import importlib.util
+import plistlib
 import tempfile
 import subprocess
 import unittest
@@ -29,7 +30,6 @@ class IdentityTests(unittest.TestCase):
         for path, text in changes.items():
             if text is not None:
                 self.assertNotIn("stream.yattee.app", text, str(path))
-                self.assertNotIn('"yattee"', text, str(path))
                 self.assertNotIn("yattee://", text, str(path))
         project = changes[self.root / "Yattee.xcodeproj/project.pbxproj"]
         self.assertIn('PRODUCT_BUNDLE_IDENTIFIER = com.example.yatteeprofiles.TopShelf;', project)
@@ -41,6 +41,29 @@ class IdentityTests(unittest.TestCase):
         self.assertIsNone(changes[self.root / ".github/workflows/release.yml"])
         # Dry-run source must remain original.
         self.assertIn("stream.yattee.app", (self.root / "Yattee/Core/AppIdentifiers.swift").read_text())
+
+    def test_url_scheme_changes_preserve_server_protocol(self):
+        for scheme in ("yatteeprofiles", "custom-profiles"):
+            with self.subTest(scheme=scheme):
+                changes = mod.plan(self.root, "com.example.yatteeprofiles", scheme)
+                # The real upstream detector and its fixture/assertions must stay intact.
+                for name in ("Yattee/Services/API/InstanceDetector.swift",
+                             "YatteeTests/APIParsingTests.swift"):
+                    path = self.root / name
+                    self.assertEqual(changes.get(path, path.read_text()), path.read_text())
+                for name in ("Yattee/Services/Navigation/URLRouter.swift",
+                             "Yattee/Services/Navigation/XCallback.swift",
+                             "Yattee/Services/Navigation/LinkAction.swift",
+                             "Yattee/Services/TopShelfSnapshotWriter.swift"):
+                    text = changes[self.root / name]
+                    self.assertNotIn('"yattee"', text, name)
+                    self.assertIn('"' + scheme + '"', text, name)
+                for name in ("Yattee/Info.plist", "Yattee/Info-tvOS.plist"):
+                    info = plistlib.loads(changes[self.root / name].encode())
+                    schemes = [value for entry in info["CFBundleURLTypes"]
+                               for value in entry["CFBundleURLSchemes"]]
+                    self.assertIn(scheme, schemes)
+                    self.assertNotIn("yattee", schemes)
 
     def test_rejects_upstream_identity_and_bad_arguments(self):
         for bundle, scheme in [
