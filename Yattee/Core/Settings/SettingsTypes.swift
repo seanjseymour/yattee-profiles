@@ -15,7 +15,20 @@ import AppKit
 
 // MARK: - Theme & Appearance
 
-enum AppTheme: String, CaseIterable, Codable {
+/// Layout identity is independent from the window's light/dark appearance.
+enum TVDesignTheme: String, CaseIterable, Codable, Sendable {
+    case horizon
+    case slate
+
+    var displayName: String {
+        switch self {
+        case .horizon: return "Horizon"
+        case .slate: return "Slate"
+        }
+    }
+}
+
+enum AppTheme: String, CaseIterable, Codable, Sendable {
     case system
     case light
     case dark

@@ -96,7 +96,8 @@ struct ViewerPickerView: View {
             }
         }
         .padding(60)
-        .background(Color.black.ignoresSafeArea())
+        .buttonStyle(TVDesignButtonStyle())
+        .tvDesignSurface()
         .onChange(of: focusedControl) { _, target in
             // Names/UUIDs are intentionally omitted from focus diagnostics.
             let control: String

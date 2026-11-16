@@ -16,6 +16,44 @@ import AppKit
 extension SettingsManager {
     // MARK: - Theme Settings
 
+    /// Device-local TV layout. Choosing a layout never changes appearance.
+    var tvDesignTheme: TVDesignTheme {
+        get {
+            if let cached = _tvDesignTheme { return cached }
+            return TVDesignTheme(rawValue: string(for: .tvDesignTheme) ?? "") ?? .horizon
+        }
+        set {
+            _tvDesignTheme = newValue
+            set(newValue.rawValue, for: .tvDesignTheme)
+        }
+    }
+
+    /// Kept separate from the older synced iOS/macOS theme preference.
+    var tvAppearanceMode: AppTheme {
+        get {
+            if let cached = _tvAppearanceMode { return cached }
+            return AppTheme(rawValue: string(for: .tvAppearanceMode) ?? "") ?? .system
+        }
+        set {
+            _tvAppearanceMode = newValue
+            set(newValue.rawValue, for: .tvAppearanceMode)
+            Self.applyTVAppearance(newValue)
+        }
+    }
+
+    /// .unspecified removes the override, retaining live system inheritance.
+    /// Never persist the current trait as a substitute for the System choice.
+    static func applyTVAppearance(_ mode: AppTheme) {
+        #if os(tvOS)
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = mode.userInterfaceStyle
+            }
+        }
+        #endif
+    }
+
     var theme: AppTheme {
         get {
             if let cached = _theme { return cached }

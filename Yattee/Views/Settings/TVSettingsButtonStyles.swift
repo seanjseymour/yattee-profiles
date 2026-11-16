@@ -88,6 +88,8 @@ struct TVSettingsTextField: View {
 /// Button style for settings forms - subtle focus effect without glow
 struct TVSettingsButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.tvDesignPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
@@ -97,32 +99,42 @@ struct TVSettingsButtonStyle: ButtonStyle {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isFocused ? .white.opacity(0.2) : .clear)
+                    .fill(isFocused ? palette.accent.opacity(0.14) : .clear)
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : (isFocused ? 1.02 : 1.0))
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isFocused ? palette.accent : .clear, lineWidth: 3)
+            }
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : (isFocused ? 1.02 : 1.0)))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isFocused)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
 /// Button style for toolbar Done/Cancel buttons - pill shaped like tvOS standard
 struct TVToolbarButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.tvDesignPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout)
             .fontWeight(.medium)
-            .foregroundStyle(isFocused ? .white : .secondary)
+            .foregroundStyle(palette.foreground)
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
             .background(
                 Capsule()
-                    .fill(isFocused ? Color.white.opacity(0.3) : Color.white.opacity(0.1))
+                    .fill(isFocused ? palette.accent.opacity(0.14) : palette.surface)
             )
-            .scaleEffect(configuration.isPressed ? 0.95 : (isFocused ? 1.05 : 1.0))
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .overlay {
+                Capsule()
+                    .strokeBorder(isFocused ? palette.accent : .clear, lineWidth: 3)
+            }
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.95 : (isFocused ? 1.05 : 1.0)))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isFocused)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -161,6 +173,8 @@ struct TVSourceRowLabelStyle: LabelStyle {
 /// Button style for form rows (toggles, pickers) - matches form appearance
 struct TVFormRowButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.tvDesignPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -169,11 +183,15 @@ struct TVFormRowButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isFocused ? .white.opacity(0.15) : .clear)
+                    .fill(isFocused ? palette.accent.opacity(0.14) : .clear)
             )
-            .scaleEffect(configuration.isPressed ? 0.98 : (isFocused ? 1.01 : 1.0))
-            .animation(.easeInOut(duration: 0.15), value: isFocused)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isFocused ? palette.accent : .clear, lineWidth: 3)
+            }
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.98 : (isFocused ? 1.01 : 1.0)))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isFocused)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 #endif
