@@ -92,9 +92,12 @@ struct ViewerWatchStoreTests {
         let recovered = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(recovered.recoveredFromCacheLoss)
         #expect(recovered.recoveryIsLimited)
+        #expect(recovered.recoveryWasPartial)
         #expect(recovered.history(viewerID: a).count == ViewerWatchStore.recoveryEntriesPerViewer)
         #expect(recovered.history(viewerID: b).isEmpty)
         #expect(recovered.record(viewerID: a, key: "source/24")?.seconds == 44)
+        try recovered.save(record(a, key: "source/24", seconds: 45))
+        #expect(recovered.recoveryWasPartial, "Saving again must not erase the partial-recovery notice")
     }
 
     @Test func legacyAndUnknownNewerBytesAreNeverReplaced() throws {

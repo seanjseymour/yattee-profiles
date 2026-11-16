@@ -28,7 +28,7 @@ extension ViewerWatchRecord {
                           description: nil, author: Author(id: authorID, name: authorName),
                           duration: duration, publishedAt: nil, publishedText: nil,
                           viewCount: nil, likeCount: nil,
-                          thumbnails: Thumbnail.fallbackChain(for: thumbnail.flatMap(URL.init(string:))),
+                          thumbnails: Thumbnail.fallbackChain(for: thumbnail.flatMap { URL(string: $0) }),
                           isLive: live, isUpcoming: false, scheduledStartTime: nil)
         let entry = WatchEntry.from(video: video)
         entry.watchedSeconds = seconds
