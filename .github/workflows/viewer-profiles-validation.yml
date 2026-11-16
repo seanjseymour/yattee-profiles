@@ -1,0 +1,78 @@
+name: Temporary viewer profiles tests
+
+on:
+  push:
+    branches:
+      - validation/viewer-profiles-b664c786
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-viewer-profiles-b664c786
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/validation/viewer-profiles-b664c786'
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      TESTED_SHA: b664c7865683c1e29776497e418762bb0ea7b5a9
+    steps:
+      - name: Check out pinned feature revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b664c7865683c1e29776497e418762bb0ea7b5a9
+          persist-credentials: false
+
+      - name: Verify revision and toolchain
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test -z "$(git status --porcelain)"
+          test -d "$DEVELOPER_DIR"
+          git rev-parse HEAD
+          xcodebuild -version
+          xcodebuild -version | head -n 1 | grep -Fx 'Xcode 27.2'
+          echo "TEST_ROOT=$RUNNER_TEMP/viewer-profiles-tests" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/viewer-profiles-tests"
+
+      - name: Resolve pinned dependencies without signing
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project Yattee.xcodeproj -scheme Yattee \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath "$TEST_ROOT/packages" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
+          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+      - name: Run only ViewerProfilesTests unsigned on macOS
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          xcodebuild test -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'platform=macOS' \
+            -only-testing:YatteeTests/ViewerProfilesTests \
+            -parallel-testing-enabled NO \
+            -derivedDataPath "$TEST_ROOT/DerivedData" \
+            -clonedSourcePackagesDirPath "$TEST_ROOT/packages" \
+            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
+            -resultBundlePath "$TEST_ROOT/ViewerProfilesTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$TEST_ROOT/tests.log"
+
+      - name: Record tested revision
+        if: always()
+        run: |
+          {
+            echo "Pinned feature revision: $TESTED_SHA"
+            echo "Observed checkout: $(git rev-parse HEAD)"
+            echo "Requested suite: YatteeTests/ViewerProfilesTests (6 tests)"
+            echo "Inspect test output for actual executed counts and failures."
+          } >> "$GITHUB_STEP_SUMMARY"
