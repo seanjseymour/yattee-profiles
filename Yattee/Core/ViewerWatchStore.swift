@@ -163,12 +163,16 @@ final class ViewerWatchStore {
             for index in 0..<Self.recoveryEntriesPerViewer {
                 for queue in queues where index < queue.count { recovery.append(queue[index]) }
             }
-            var backup = Data()
-            while true {
-                backup = try encoder.encode(Snapshot(records: recovery, incompleteRecovery: recovery.count < next.count))
-                if backup.count <= Self.recoveryByteLimit { break }
-                recovery.removeLast()
+            var selected: [ViewerWatchRecord] = []
+            for record in recovery {
+                let candidate = selected + [record]
+                let bytes = try encoder.encode(Snapshot(records: candidate, incompleteRecovery: candidate.count < next.count))
+                // Skip an oversized entry rather than dropping later viewers
+                // who could fit. Continue the same round-robin selection.
+                if bytes.count <= Self.recoveryByteLimit { selected = candidate }
             }
+            recovery = selected
+            let backup = try encoder.encode(Snapshot(records: recovery, incompleteRecovery: recovery.count < next.count))
             // Budget the app's persistent domain, not global/registration
             // defaults that belong to the OS and aren't stored by this app.
             var domain = defaultsDomainName.flatMap { defaults.persistentDomain(forName: $0) }
