@@ -138,6 +138,9 @@ struct ViewerWatchStoreTests {
             try store.save(busy)
         }
         try store.save(record(a, key: "active-resume", seconds: 70, date: .distantPast))
+        var oversized = record(a, key: "oversized", seconds: 10)
+        oversized.title = String(repeating: "x", count: 150 * 1024)
+        try store.save(oversized)
         try FileManager.default.removeItem(at: url)
         let restored = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(restored.record(viewerID: b, key: "source-A/video")?.seconds == 45)
