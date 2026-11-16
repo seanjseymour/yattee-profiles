@@ -60,11 +60,14 @@ extension DataManager {
     }
 
     func saveViewerProgress(for video: Video, seconds: Double, duration: Double?, isLive: Bool,
-                            viewerID: UUID?, finished: Bool = false) -> Bool {
+                            viewerID: UUID?, finished: Bool = false, writePermit: ViewerWatchStore.WritePermit? = nil) -> Bool {
         guard let store = viewerWatchStore else { return false }
         // With the viewer store configured, failure to resolve an owner must
         // never fall through to the shared legacy store.
         guard let owner = viewerID ?? activeHistoryViewerID else { return true }
+        if let permit = writePermit {
+            guard permit.viewerID == owner, permit.key == video.id.watchHistoryKey, store.accepts(permit) else { return true }
+        }
         do {
             let old = store.record(viewerID: owner, key: video.id.watchHistoryKey)
             let live = video.isLive || isLive
@@ -88,11 +91,11 @@ extension DataManager {
     }
 
     @discardableResult
-    func removeViewerHistory(matching predicate: (ViewerWatchRecord) -> Bool) -> Bool {
+    func removeViewerHistory(invalidatingKeys: [String] = [], invalidateAll: Bool = false, matching predicate: (ViewerWatchRecord) -> Bool) -> Bool {
         guard let store = viewerWatchStore else { return false }
         guard let owner = activeHistoryViewerID else { return true }
         do {
-            try store.remove(viewerID: owner, matching: predicate)
+            try store.remove(viewerID: owner, invalidatingKeys: invalidatingKeys, invalidateAll: invalidateAll, matching: predicate)
             NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
             TopShelfSnapshotWriter.writeContinueWatching(dataManager: self)
         } catch {
@@ -102,7 +105,7 @@ extension DataManager {
     }
 
     func removeFromHistory(videoID: VideoID) {
-        if removeViewerHistory(matching: { $0.key == videoID.watchHistoryKey }) { return }
+        if removeViewerHistory(invalidatingKeys: [videoID.watchHistoryKey], matching: { $0.key == videoID.watchHistoryKey }) { return }
         removeFromHistory(videoID: videoID.videoID)
     }
 
