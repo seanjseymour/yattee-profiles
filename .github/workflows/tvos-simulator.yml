@@ -52,6 +52,9 @@ jobs:
             xcodebuild -showsdks
           } 2>&1 | tee "$CI_OUTPUT/toolchain.log"
 
+      - name: Test isolated viewer history model
+        run: bash scripts/test-viewer-history.sh
+
       - name: Resolve pinned Swift packages
         run: |
           set -euo pipefail
