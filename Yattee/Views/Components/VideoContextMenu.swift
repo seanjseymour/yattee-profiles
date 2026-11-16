@@ -215,7 +215,7 @@ struct VideoContextMenuContent: View {
 
     /// Computed at render time to always show current watch state
     private var isWatched: Bool {
-        appEnvironment?.dataManager.watchEntry(for: video.id.videoID)?.isFinished ?? false
+        appEnvironment?.dataManager.watchEntry(for: video.id)?.isFinished ?? false
     }
 
     @ViewBuilder
@@ -317,7 +317,7 @@ struct VideoContextMenuContent: View {
         if !video.isFromLocalFolder {
             Button {
                 if isWatched {
-                    appEnvironment?.dataManager.markAsUnwatched(videoID: video.id.videoID)
+                    appEnvironment?.dataManager.markAsUnwatched(videoID: video.id)
                 } else {
                     appEnvironment?.dataManager.markAsWatched(video: video)
                 }

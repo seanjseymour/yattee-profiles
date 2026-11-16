@@ -136,15 +136,15 @@ struct ChannelView: View {
 
     // Filtered video arrays (for hideWatched)
     private var filteredVideos: [Video] {
-        hideWatched ? videos.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : videos
+        hideWatched ? videos.filter { watchEntriesMap[$0.id.watchHistoryKey]?.isFinished != true } : videos
     }
 
     private var filteredShorts: [Video] {
-        hideWatched ? shorts.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : shorts
+        hideWatched ? shorts.filter { watchEntriesMap[$0.id.watchHistoryKey]?.isFinished != true } : shorts
     }
 
     private var filteredStreams: [Video] {
-        hideWatched ? streams.filter { watchEntriesMap[$0.id.videoID]?.isFinished != true } : streams
+        hideWatched ? streams.filter { watchEntriesMap[$0.id.watchHistoryKey]?.isFinished != true } : streams
     }
 
     /// Whether inset grouped background should be shown.
@@ -301,7 +301,7 @@ struct ChannelView: View {
     }
 
     private func watchProgress(for video: Video) -> Double? {
-        guard let entry = watchEntriesMap[video.id.videoID] else { return nil }
+        guard let entry = watchEntriesMap[video.id.watchHistoryKey] else { return nil }
         let progress = entry.progress
         return progress > 0 && progress < 1 ? progress : nil
     }

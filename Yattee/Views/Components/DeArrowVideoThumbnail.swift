@@ -93,7 +93,7 @@ struct DeArrowVideoThumbnail: View {
 
     /// Updates the watched state from the data manager.
     private func updateWatchedState() {
-        isWatched = appEnvironment?.dataManager.watchEntry(for: video.id.videoID)?.isFinished ?? false
+        isWatched = appEnvironment?.dataManager.watchEntry(for: video.id)?.isFinished ?? false
     }
 
     var body: some View {

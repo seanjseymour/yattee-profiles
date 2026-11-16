@@ -215,6 +215,16 @@ final class AppEnvironment {
             }
         }
         self.dataManager = dm
+        #if os(tvOS)
+        let viewerManager = viewerProfilesManager
+        let viewerHistoryURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("YatteeProfiles/ViewerWatch-v1.json")
+        dm.viewerWatchStore = ViewerWatchStore(fileURL: viewerHistoryURL)
+        dm.historyViewerID = { [weak viewerManager] in
+            guard let viewerManager, !viewerManager.storageUnavailable else { return nil }
+            return viewerManager.activeViewerID
+        }
+        #endif
 
         // Resolve which Apple account owns this device's credentials before the
         // managers that key items by it are built. Cached scopes restore

@@ -55,7 +55,7 @@ struct BookmarksListView: View {
         // Apply watch status filter
         if hideWatched {
             result = result.filter { bookmark in
-                guard let entry = watchEntriesMap[bookmark.videoID] else { return true }
+                guard let entry = watchEntriesMap[bookmark.toVideo().id.watchHistoryKey] else { return true }
                 return !entry.isFinished
             }
         }
@@ -65,7 +65,7 @@ struct BookmarksListView: View {
 
     /// Gets the watch progress (0.0-1.0) for a bookmark, or nil if not watched/finished.
     private func watchProgress(for bookmark: Bookmark) -> Double? {
-        guard let entry = watchEntriesMap[bookmark.videoID] else { return nil }
+        guard let entry = watchEntriesMap[bookmark.toVideo().id.watchHistoryKey] else { return nil }
         let progress = entry.progress
         // Only show progress bar for partially watched videos
         return progress > 0 && progress < 1 ? progress : nil

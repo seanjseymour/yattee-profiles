@@ -158,6 +158,13 @@ struct SearchView: View {
         .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
             loadWatchEntries()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .viewerDidChange)) { _ in
+            // Watched filtering was applied when results were fetched. Requery
+            // so the previous viewer's omitted results don't remain hidden.
+            guard hideWatched, !searchTextBinding.wrappedValue.isEmpty else { return }
+            searchViewModel?.clearResults()
+            Task { await searchViewModel?.search(query: searchTextBinding.wrappedValue) }
+        }
         .task {
             loadWatchEntries()
         }
@@ -1357,7 +1364,7 @@ struct SearchView: View {
     }
 
     private func watchProgress(for video: Video) -> Double? {
-        guard let entry = watchEntriesMap[video.id.videoID] else { return nil }
+        guard let entry = watchEntriesMap[video.id.watchHistoryKey] else { return nil }
         let progress = entry.progress
         return progress > 0 && progress < 1 ? progress : nil
     }

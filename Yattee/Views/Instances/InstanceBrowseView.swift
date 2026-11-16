@@ -825,7 +825,7 @@ struct InstanceBrowseView: View {
         // Filter out watched videos if enabled
         if hideWatched {
             videos = videos.filter { video in
-                guard let entry = watchEntriesMap[video.id.videoID] else { return true }
+                guard let entry = watchEntriesMap[video.id.watchHistoryKey] else { return true }
                 return !entry.isFinished
             }
         }
@@ -855,7 +855,7 @@ struct InstanceBrowseView: View {
     
     /// Gets the watch progress (0.0-1.0) for a video, or nil if not watched/finished.
     private func watchProgress(for video: Video) -> Double? {
-        guard let entry = watchEntriesMap[video.id.videoID] else { return nil }
+        guard let entry = watchEntriesMap[video.id.watchHistoryKey] else { return nil }
         let progress = entry.progress
         // Only show progress bar for partially watched videos
         return progress > 0 && progress < 1 ? progress : nil

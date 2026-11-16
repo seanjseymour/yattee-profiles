@@ -133,6 +133,8 @@ final class PlayerService {
     private let progressSaveInterval: TimeInterval = 5
     /// Last position written by the periodic progress save.
     private var lastSavedProgress: (videoID: String, seconds: TimeInterval)?
+    private var viewerPlaybackOwnership = ViewerPlaybackOwnership()
+    private var backendViewerID: UUID?
 
     /// Now Playing service for Control Center/Lock Screen.
     private let nowPlayingService = NowPlayingService()
@@ -275,6 +277,11 @@ final class PlayerService {
             saveProgressAndSync()
         }
 
+        if dataManager.viewerWatchStore != nil {
+            viewerPlaybackOwnership.load(viewerID: dataManager.activeHistoryViewerID)
+        }
+        let resumeViewerID = viewerPlaybackOwnership.session?.viewerID
+
         // Mirror this watch into the active account's server history.
         // Unconditional, and the service decides: `isNewVideo` is already false
         // for most openings, because openVideo() puts the video into state
@@ -286,6 +293,7 @@ final class PlayerService {
 
         // This load is the playback from here on
         playbackGeneration += 1
+        let loadGeneration = playbackGeneration
 
         // Reset flag for the new video
         videoEndedNaturally = false
@@ -383,6 +391,7 @@ final class PlayerService {
 
                 // Check for cancellation after network fetch
                 try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
                 self.availableStreams = streams
                 self.availableCaptions = captions
@@ -436,6 +445,7 @@ final class PlayerService {
 
             // Check for cancellation before loading stream
             try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
             // Calculate seek time BEFORE loading to know if we need to prepare for initial seek
             // This prevents the thumbnail from hiding before the resume position is reached
@@ -443,7 +453,7 @@ final class PlayerService {
             // Use state.duration as fallback for quality switching when video.duration might be 0
             let effectiveDuration = video.duration > 0 ? video.duration : state.duration
             let completionThreshold = effectiveDuration * 0.9
-            let savedProgress = dataManager.watchProgress(for: video.id.videoID)
+            let savedProgress = dataManager.watchProgress(for: video.id, viewerID: resumeViewerID)
             LoggingService.shared.logPlayer("Replay check: savedProgress=\(savedProgress ?? -1), startTime=\(startTime ?? -1), duration=\(video.duration), threshold=\(completionThreshold)")
 
             if video.isLive || selectedStream.isLive {
@@ -506,6 +516,7 @@ final class PlayerService {
 
             // Check for cancellation after stream load completes
             try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
             if seekTime > 0 {
                 await backend.seek(to: seekTime, showLoading: false)
@@ -740,6 +751,7 @@ final class PlayerService {
         currentPlayTask = nil
 
         saveProgressAndSync()
+        viewerPlaybackOwnership.close()
         watchHistorySyncService?.endSession()
         cleanup()
 
@@ -1134,7 +1146,8 @@ final class PlayerService {
         #endif
 
         // If this video is already loaded, optionally seek/resume instead of reloading.
-        if isCurrentlyPlaying(video: video) {
+        if isCurrentlyPlaying(video: video),
+           dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID {
             LoggingService.shared.logPlayer("Video already loaded, applying seek/resume instead of reload (startTime=\(startTime ?? -1), state=\(state.playbackState))")
             if !mpvPiPActive {
                 navigationCoordinator?.expandPlayer()
@@ -1155,6 +1168,16 @@ final class PlayerService {
 
         // Cancel any previous play task before starting a new one
         currentPlayTask?.cancel()
+
+        if dataManager.viewerWatchStore != nil {
+            if !videoEndedNaturally { saveProgressAndSync() }
+            progressSaveTimer?.invalidate()
+            progressSaveTimer = nil
+            // Same-video openings don't reset PlayerState's clock themselves.
+            state.currentTime = 0
+            viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
+            lastSavedProgress = nil
+        }
 
         // The opening owns the player from here, before the load task even runs
         playbackGeneration += 1
@@ -1190,7 +1213,8 @@ final class PlayerService {
         #endif
 
         // If this video is already loaded, optionally resume instead of reloading.
-        if isCurrentlyPlaying(video: video) {
+        if isCurrentlyPlaying(video: video),
+           dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID {
             if !mpvPiPActive {
                 navigationCoordinator?.expandPlayer()
             }
@@ -1202,6 +1226,16 @@ final class PlayerService {
 
         // Cancel any previous play task before starting a new one
         currentPlayTask?.cancel()
+
+        if dataManager.viewerWatchStore != nil {
+            if !videoEndedNaturally { saveProgressAndSync() }
+            progressSaveTimer?.invalidate()
+            progressSaveTimer = nil
+            // Same-video openings don't reset PlayerState's clock themselves.
+            state.currentTime = 0
+            viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
+            lastSavedProgress = nil
+        }
 
         // The opening owns the player from here, before the load task even runs
         playbackGeneration += 1
@@ -2471,14 +2505,27 @@ final class PlayerService {
         return 0
     }
 
+    private func acceptsViewerCallback(from backend: any PlayerBackend) -> Bool {
+        dataManager.viewerWatchStore == nil ||
+            (currentBackend === backend && backendViewerID == viewerPlaybackOwnership.session?.viewerID &&
+             viewerPlaybackOwnership.session != nil)
+    }
+
     private func ensureBackend(type: PlayerBackendType) async throws -> any PlayerBackend {
         // Reuse existing backend if same type
-        if let current = currentBackend, current.backendType == type {
+        if let current = currentBackend, current.backendType == type,
+           dataManager.viewerWatchStore == nil || backendViewerID == viewerPlaybackOwnership.session?.viewerID {
             return current
         }
 
-        // Create new backend
+        // Crossing a viewer boundary gets a new backend. Delayed callbacks
+        // from the retired backend cannot write into the new viewer's session.
+        if dataManager.viewerWatchStore != nil {
+            currentBackend?.delegate = nil
+            currentBackend?.stop()
+        }
         let backend = try backendFactory.createBackend(type: type)
+        backendViewerID = viewerPlaybackOwnership.session?.viewerID
         backend.delegate = self
         currentBackend = backend
 
@@ -2801,6 +2848,7 @@ final class PlayerService {
     }
 
     private func saveProgress() {
+        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
         PerfCounter.count("player.progressSave")
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false else { return }
@@ -2810,7 +2858,7 @@ final class PlayerService {
 
         // A paused player keeps the timer running; rewriting the same position
         // only adds database writes, including while the app is being suspended.
-        let position = (videoID: video.id.videoID, seconds: state.currentTime)
+        let position = (videoID: "\(viewerPlaybackOwnership.session?.id.uuidString ?? "shared")|\(video.id.watchHistoryKey)", seconds: state.currentTime)
         guard lastSavedProgress?.videoID != position.videoID
             || lastSavedProgress?.seconds != position.seconds else { return }
         lastSavedProgress = position
@@ -2832,7 +2880,7 @@ final class PlayerService {
             }
         }
         #endif
-        dataManager.updateWatchProgressLocal(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive)
+        dataManager.updateWatchProgressLocal(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
 
         // Update Handoff activity with current playback time
@@ -2842,6 +2890,7 @@ final class PlayerService {
     /// Saves progress as 100% completed when video finishes naturally.
     /// This ensures the watch history shows full completion instead of ~99%.
     private func saveProgressAsCompleted() {
+        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false,
               let video = state.currentVideo else { return }
@@ -2859,7 +2908,7 @@ final class PlayerService {
         // Save the full duration as watched time and queue for iCloud sync.
         // This is the only save for a naturally finished video — play() skips
         // saveProgressAndSync() when videoEndedNaturally is set.
-        dataManager.updateWatchProgress(for: video, seconds: completedDuration, duration: completedDuration)
+        dataManager.updateWatchProgress(for: video, seconds: completedDuration, duration: completedDuration, viewerID: viewerPlaybackOwnership.session?.viewerID)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
 
         // Update Handoff activity with completed time
@@ -2869,6 +2918,7 @@ final class PlayerService {
     /// Saves progress and triggers iCloud sync for watch history.
     /// Call this when video playback ends or switches to a different video.
     private func saveProgressAndSync() {
+        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false else { return }
 
@@ -2876,7 +2926,7 @@ final class PlayerService {
               state.currentTime > 0 else { return }
 
         // Save and queue for iCloud sync (used when video closes/switches)
-        dataManager.updateWatchProgress(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive)
+        dataManager.updateWatchProgress(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
         NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
     }
@@ -3050,8 +3100,9 @@ final class PlayerService {
 
 extension PlayerService: PlayerBackendDelegate {
     func backend(_ backend: any PlayerBackend, didUpdateTime time: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Ignore time updates while loading a new video - these are stale updates from the previous video
-        guard loadingVideoID == nil else { return }
+        guard currentBackend === backend, loadingVideoID == nil else { return }
 
         state.currentTime = time
         delegate?.playerService(self, didUpdateTime: time)
@@ -3072,6 +3123,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateDuration duration: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Skip duration updates when locked from API (fast endpoint streams where
         // file is progressively downloaded and MPV can't determine accurate duration)
         guard !state.isDurationLockedFromAPI else { return }
@@ -3079,6 +3131,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didChangeState playbackState: PlaybackState) {
+        guard acceptsViewerCallback(from: backend) else { return }
         LoggingService.shared.debug("Backend state changed to: \(playbackState)", category: .player)
 
         // Clear the time-update gate once the new video is loaded, in case the load
@@ -3097,10 +3150,12 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateBufferedTime time: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         state.bufferedTime = time
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateBufferProgress progress: Int) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Only update during initial buffering (before buffer is ready)
         // Skip buffer progress for local files - they load quickly and don't need buffering indicator
         let isLocalFile = state.currentStream?.url.isFileURL == true
@@ -3110,6 +3165,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateVideoSize width: Int, height: Int) {
+        guard acceptsViewerCallback(from: backend) else { return }
         guard width > 0, height > 0 else { return }
         let aspectRatio = Double(width) / Double(height)
 
@@ -3118,6 +3174,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateRetryState currentRetry: Int, maxRetries: Int, isRetrying: Bool, exhausted: Bool) {
+        guard acceptsViewerCallback(from: backend) else { return }
         let retryState = RetryState(
             currentRetry: currentRetry,
             maxRetries: maxRetries,
@@ -3128,11 +3185,13 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateTracks tracks: [MPVTrack]) {
+        guard acceptsViewerCallback(from: backend) else { return }
         embeddedTracks = tracks
         reapplyOrAutoSelectEmbeddedTracks()
     }
 
     func backend(_ backend: any PlayerBackend, didRequestStreamRefresh atTime: TimeInterval?) {
+        guard acceptsViewerCallback(from: backend) else { return }
         LoggingService.shared.logPlayer("Stream refresh requested at time: \(atTime ?? -1)")
 
         Task {
@@ -3141,11 +3200,13 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backendDidBecomeReady(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // First frame of new video has been rendered - thumbnail can now hide
         state.isFirstFrameReady = true
     }
 
     func backendDidFallBackToSoftwareDecoding(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
         toastManager?.show(
             category: .playerStatus,
             title: String(localized: "toast.player.hwdecFallback.title"),
@@ -3157,6 +3218,9 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backendDidFinishPlaying(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
+        guard currentBackend === backend, loadingVideoID == nil,
+              state.currentVideo != nil else { return }
         // Mark that video ended naturally - prevents play() from saving progress again
         // when switching to next video (100% is already saved below)
         videoEndedNaturally = true
