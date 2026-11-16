@@ -335,7 +335,7 @@ final class PlayerService {
         // id, so only clear our own). Prevents the time-update gate from leaking if
         // the load flow exits early (issue #956).
         defer {
-            if loadingVideoID == video.id { loadingVideoID = nil }
+            if loadGeneration == playbackGeneration, loadingVideoID == video.id { loadingVideoID = nil }
         }
 
         state.setPlaybackState(.loading)
@@ -391,7 +391,7 @@ final class PlayerService {
 
                 // Check for cancellation after network fetch
                 try Task.checkCancellation()
-            guard loadGeneration == playbackGeneration else { throw CancellationError() }
+                guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
                 self.availableStreams = streams
                 self.availableCaptions = captions
@@ -509,6 +509,9 @@ final class PlayerService {
                 state.volume = 1.0
             }
 
+            try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
+
             // Load stream
             // Pass EDL setting (MPV-specific: combines video+audio into single virtual file for unified caching)
             let useEDL = settingsManager?.mpvUseEDLStreams ?? true
@@ -528,6 +531,8 @@ final class PlayerService {
             // Wait for SponsorBlock segments (started earlier in parallel with stream loading)
             // This ensures we have segments before playback starts, so intro skips can show loading
             await sponsorBlockTask?.value
+            try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
             // Resolve chapters after SponsorBlock segments are available
             // Uses hierarchy: SponsorBlock chapters > description parsing
@@ -586,6 +591,9 @@ final class PlayerService {
                 _ = await mpvBackend.waitForBuffer(minimumBuffer: bufferTime)
             }
 
+            try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
+
             // Buffer is ready - thumbnail can now hide
             state.isBufferReady = true
             state.bufferProgress = nil  // Clear buffer progress since buffering is complete
@@ -595,6 +603,8 @@ final class PlayerService {
             // Without this, audio may start while thumbnail is still visible.
             try? await Task.sleep(nanoseconds: 250_000_000)  // 250ms (animation is 200ms)
 
+            try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
             backend.play()
 
             // Update Handoff activity for cross-device continuation
@@ -606,6 +616,9 @@ final class PlayerService {
             if stream == nil, case .global = video.id.source {
                 await fetchReturnYouTubeDislikeCounts(for: video.id.videoID)
             }
+
+            try Task.checkCancellation()
+            guard loadGeneration == playbackGeneration else { throw CancellationError() }
 
             // Load preferred subtitle if one was selected earlier (for MPV backend)
             if let caption = currentCaption, let mpvBackend = backend as? MPVBackend {
@@ -624,15 +637,14 @@ final class PlayerService {
         } catch is CancellationError {
             // Load was cancelled because a new video was selected - don't report as error
             LoggingService.shared.logPlayer("Playback cancelled: \(video.id.id)")
-            sleepPreventionService.allowSleep()
+            if loadGeneration == playbackGeneration { sleepPreventionService.allowSleep() }
         } catch {
             // If the user has already switched to a different video while this one was
             // still loading/retrying, suppress the error — it no longer applies to what
             // is on screen. loadingVideoID is reassigned by every new play() call and
             // cleared on success, so a mismatch means we are no longer the active load.
-            guard loadingVideoID == video.id else {
+            guard loadGeneration == playbackGeneration, loadingVideoID == video.id else {
                 LoggingService.shared.logPlayer("Ignoring stale playback error for \(video.id.id) — user switched videos")
-                sleepPreventionService.allowSleep()
                 return
             }
 
