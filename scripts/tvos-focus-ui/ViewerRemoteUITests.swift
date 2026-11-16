@@ -118,10 +118,9 @@ final class ViewerRemoteUITests: XCTestCase {
 
     func testSettingsDetailBackAndLauncherBackStayInApp() {
         launch(items: 0, settings: true)
-        let appearance = app.buttons["Appearance"]
-        // Settings uses native navigation links; some OS versions expose them
-        // as cells. Query all descendants by label if necessary.
-        let row = appearance.exists ? appearance : app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Appearance'")).firstMatch
+        // tvOS List focuses the cell, not the NavigationLink's child button.
+        // Querying the child always reports hasFocus=false and walks past it.
+        let row = app.cells["Appearance"]
         focusInitialContent(row)
         remote.press(.select)
         let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: launcher)

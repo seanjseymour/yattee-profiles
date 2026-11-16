@@ -94,6 +94,18 @@ Results and exact candidate receipts are recorded in the implementation handoff.
 A compile-only result is never UI/DEVICE evidence. If the test harness cannot
 launch on the hosted image, keep all corresponding matrix rows unverified.
 
+Hosted execution is feasible: run
+[43798346689](https://github.com/seanjseymour/yattee-profiles/actions/runs/43798346689)
+at `1c949cb50ed0644b8f2ec0d349f49cda3e08b77b` compiled the app/Top Shelf and passed
+the empty Home, two-tile traversal and single-tile/picker remote tests. The
+Settings test stopped in setup because it queried the child button rather than
+the focused native List cell; the harness now queries the cell. That run does
+not establish Settings Back behavior. Earlier unsigned launch diagnostics
+identified a CKContainer entitlement trap; the explicit simulator fixture now
+disables CloudKit availability before environment initialization. This exclusion
+is absent from device and Release builds and changes no signing or entitlements.
+Use the final handoff's exact-SHA receipt for the subsequent full-suite result.
+
 ## Short physical retest
 
 1. Home with one tile: Right → Viewer → Select → picker; Back → Viewer; Left →
