@@ -352,6 +352,9 @@ struct UnifiedTabView: View {
 struct UnifiedTabView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
+    @State private var showingViewerPicker = false
+    @FocusState private var viewerButtonFocused: Bool
+
     let router: NavigationRouter
 
     // Zoom transition namespace (local to this tab view)
@@ -376,6 +379,30 @@ struct UnifiedTabView: View {
             sidebarSections
         }
         .tabViewStyle(.sidebarAdaptable)
+        .safeAreaInset(edge: .top) {
+            if let viewers = appEnvironment?.viewerProfilesManager {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingViewerPicker = true
+                    } label: {
+                        Label(String(localized: "viewers.current \(viewers.activeViewer.name)"), systemImage: "person.crop.circle")
+                            .lineLimit(1)
+                    }
+                    .focused($viewerButtonFocused)
+                    .accessibilityIdentifier("viewerPicker.open")
+                }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 12)
+            }
+        }
+        .fullScreenCover(isPresented: $showingViewerPicker, onDismiss: {
+            viewerButtonFocused = true
+        }) {
+            if let viewers = appEnvironment?.viewerProfilesManager {
+                ViewerPickerView(manager: viewers)
+            }
+        }
         .zoomTransitionNamespace(zoomTransition)
         .onAppear {
             configureSidebarManager()

@@ -1,6 +1,149 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "viewers.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who’s watching?"
+          }
+        }
+      }
+    },
+    "viewers.default": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        }
+      }
+    },
+    "viewers.current %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewer: %@"
+          }
+        }
+      }
+    },
+    "viewers.sharedData": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewer selection only. History, bookmarks, and settings are still shared."
+          }
+        }
+      }
+    },
+    "viewers.active": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active viewer"
+          }
+        }
+      }
+    },
+    "viewers.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Viewer"
+          }
+        }
+      }
+    },
+    "viewers.rename": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        }
+      }
+    },
+    "viewers.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewer name"
+          }
+        }
+      }
+    },
+    "viewers.nameHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a unique name, up to 40 characters."
+          }
+        }
+      }
+    },
+    "viewers.error.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a name between 1 and 40 characters."
+          }
+        }
+      }
+    },
+    "viewers.error.duplicate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A viewer already has that name. Choose a different name."
+          }
+        }
+      }
+    },
+    "viewers.error.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That viewer is no longer available."
+          }
+        }
+      }
+    },
+    "viewers.error.storage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved viewers could not be loaded or saved. Existing data has been kept. Close the picker and try restarting the app."
+          }
+        }
+      }
+    },
     "" : {
 
     },

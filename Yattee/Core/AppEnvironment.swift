@@ -16,6 +16,10 @@ import SwiftData
 final class AppEnvironment {
     // MARK: - Services
 
+    #if os(tvOS)
+    let viewerProfilesManager = ViewerProfilesManager()
+    #endif
+
     let settingsManager: SettingsManager
     let instancesManager: InstancesManager
     let contentService: ContentService
