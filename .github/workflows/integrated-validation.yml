@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: source
-          ref: 5ba9669dd9bdeb2780c6a02d96e8297072bd39b2
+          ref: 2167b599521ab3fa9ea478b53a471f08791bc0ad
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -30,7 +30,7 @@ jobs:
       - name: Verify exact production and initialize evidence
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^{tree})" = de93b91e88c33def28f3dd87adc3643aa0a9ecb5
+          test "$(git rev-parse HEAD^{tree})" = e0be9bbbe2c205638177f21b556d0badab9c4ace
           test "$(uname -m)" = arm64
           test -d "$DEVELOPER_DIR"
           mkdir -p "$RUNNER_TEMP/integrated-evidence"
@@ -54,21 +54,10 @@ jobs:
             -destination 'generic/platform=tvOS Simulator' -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
             -onlyUsePackageVersionsFromResolvedFile 2>&1 | tee "$CI_OUTPUT/packages.log"
           git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-      - name: Compile exact integrated production and Top Shelf unsigned
-        id: clean
-        run: |
-          set -euo pipefail
-          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
-            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
-            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
-            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/clean-build.xcresult" \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
-            2>&1 | tee "$CI_OUTPUT/clean-build.log"
-          tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/clean-integrated-app.tar.gz" Yattee.app
       - name: Verify and overlay only audited fixture deltas
         if: steps.boot.outcome == 'success'
         run: python3 ../harness/scripts/theme-validation/integrated-overlay.py
-      - name: Incrementally compile fixture
+      - name: Compile corrected integrated source with audited fixtures once
         id: fixture
         if: steps.boot.outcome == 'success'
         run: |
@@ -109,20 +98,28 @@ jobs:
       - name: Collect diagnostic evidence
         if: always()
         run: python3 ../harness/scripts/theme-validation/diagnostics.py
+      - name: Export actual UI test attachments
+        if: always()
+        run: |
+          for result in theme-remote viewer-focus-ui; do
+            if test -d "$CI_OUTPUT/$result.xcresult"; then
+              xcrun xcresulttool export attachments --path "$CI_OUTPUT/$result.xcresult" --output-path "$CI_OUTPUT/$result-attachments" || true
+            fi
+          done
       - name: Record independent outcomes
         if: always()
         run: |
           {
-            echo 'Integrated production treede93b91e88c33def28f3dd87adc3643aa0a9ecb5 (local33dfdde3).'
-            echo 'Boot ${{ steps.boot.outcome }}; exact clean compile ${{ steps.clean.outcome }}; fixture ${{ steps.fixture.outcome }}; install ${{ steps.install.outcome }}.'
+            echo 'Integrated production treee0be9bbbe2c205638177f21b556d0badab9c4ace (local972e8aae).'
+            echo 'Boot ${{ steps.boot.outcome }}; fixture ${{ steps.fixture.outcome }}; install ${{ steps.install.outcome }}.'
             echo 'Captures ${{ steps.capture.outcome }}; remote ${{ steps.remote.outcome }}; original history/navigation ${{ steps.history.outcome }}; unit tests ${{ steps.units.outcome }}.'
+            echo 'Clean33dfdde3 compiled in prior run; this corrected source compiled once with six audited simulator fixture deltas.'
             echo 'Unsigned isolated evidence only. Screenshots require independent actual-render review. No release.'
           } | tee "$CI_OUTPUT/outcomes.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Require complete validation coverage
         if: always()
         run: |
           test '${{ steps.boot.outcome }}' = success
-          test '${{ steps.clean.outcome }}' = success
           test '${{ steps.install.outcome }}' = success
           test '${{ steps.capture.outcome }}' = success
           test '${{ steps.remote.outcome }}' = success

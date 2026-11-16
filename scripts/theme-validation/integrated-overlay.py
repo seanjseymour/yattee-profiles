@@ -9,7 +9,7 @@ import subprocess
 source = Path.cwd()
 harness = Path(__file__).resolve().parents[2]
 out = Path(os.environ['CI_OUTPUT'])
-expected_tree = 'de93b91e88c33def28f3dd87adc3643aa0a9ecb5'
+expected_tree = 'e0be9bbbe2c205638177f21b556d0badab9c4ace'
 allowed = {
     'Yattee/Core/AppEnvironment.swift',
     'Yattee/Services/CloudKit/CloudKitAvailability.swift',

@@ -67,7 +67,7 @@ private struct TVDesignSurface: ViewModifier {
         )
         content
             .environment(\.tvDesignPalette, palette)
-            .foregroundStyle(palette.foreground)
+            // Native tvOS controls resolve their own focused foreground.
             .tint(palette.accent)
             .accentColor(palette.accent)
             .background(palette.background.ignoresSafeArea())

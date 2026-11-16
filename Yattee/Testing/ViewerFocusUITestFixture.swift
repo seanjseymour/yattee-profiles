@@ -114,17 +114,65 @@ struct ThemeValidationState: View {
     var body: some View {
         if ViewerFocusUITestFixture.itemCount != nil, let settings = environment?.settingsManager {
             let report = "\(settings.tvDesignTheme.rawValue)|\(settings.tvAppearanceMode.rawValue)|\(scheme == .dark ? "dark" : "light")"
-            Text("Validation")
-                .font(.caption2)
-                .accessibilityIdentifier("theme.validation.state")
-                .accessibilityValue(report)
-                .onChange(of: report, initial: true) { _, value in
-                    let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                    try? Data(value.utf8).write(to: directory.appendingPathComponent("theme-validation-state.txt"), options: .atomic)
-                }
-                .allowsHitTesting(false)
+            HStack(spacing: 8) {
+                ThemeValidationWindowProbe()
+                    .frame(width: 65, height: 18)
+                Text("Validation")
+                    .font(.caption2)
+                    .accessibilityIdentifier("theme.validation.state")
+                    .accessibilityValue(report)
+                    .onChange(of: report, initial: true) { _, value in
+                        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        try? Data(value.utf8).write(to: directory.appendingPathComponent("theme-validation-state.txt"), options: .atomic)
+                    }
+                    .allowsHitTesting(false)
+            }
+            .allowsHitTesting(false)
         }
+    }
+}
+
+/// Reads the actual containing window, never sets an appearance or focus value.
+/// Separate from the original three-part state/file contract above.
+private struct ThemeValidationWindowProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> ThemeWindowProbeLabel { ThemeWindowProbeLabel() }
+    func updateUIView(_ uiView: ThemeWindowProbeLabel, context: Context) { uiView.report() }
+}
+
+private final class ThemeWindowProbeLabel: UILabel {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        text = "Window"
+        font = .systemFont(ofSize: 12)
+        textColor = .secondaryLabel
+        isUserInteractionEnabled = false
+        isAccessibilityElement = true
+        accessibilityIdentifier = "theme.validation.window"
+        accessibilityLabel = "Window appearance diagnostics"
+    }
+    required init?(coder: NSCoder) { fatalError("Not used by the simulator fixture") }
+    override var canBecomeFocused: Bool { false }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        report()
+    }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        report()
+    }
+    func report() {
+        guard let window else { accessibilityValue = "detached"; return }
+        func style(_ value: UIUserInterfaceStyle) -> String {
+            switch value {
+            case .light: return "light"
+            case .dark: return "dark"
+            case .unspecified: return "unspecified"
+            @unknown default: return "unknown"
+            }
+        }
+        let scene = window.windowScene.map { style($0.traitCollection.userInterfaceStyle) } ?? "missing"
+        accessibilityValue = "\(style(window.overrideUserInterfaceStyle))|\(style(window.traitCollection.userInterfaceStyle))|\(scene)"
     }
 }
 #endif

@@ -28,7 +28,8 @@ private struct TVViewerRoot: ViewModifier {
                     .foregroundStyle(palette.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 48)
-                    .frame(height: 120)
+                    .frame(height: 144)
+                    .background(palette.background)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

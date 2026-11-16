@@ -33,6 +33,7 @@ struct TVContinueWatchingShelf: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("home.section.continueWatching")
                         .font(.largeTitle.bold())
+                        .foregroundStyle(palette.foreground)
                     Text("Pick up where you left off.")
                         .font(.title3)
                         .foregroundStyle(palette.secondary)
@@ -40,7 +41,6 @@ struct TVContinueWatchingShelf: View {
                 cards(entries)
             }
         }
-        .foregroundStyle(palette.foreground)
     }
 
     private func cards(_ items: [WatchEntry]) -> some View {

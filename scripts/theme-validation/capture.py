@@ -44,19 +44,15 @@ def launch_and_check(theme,mode,screen,items,name,expected):
     launch(theme,mode,screen,items)
     check(expected,name)
 
-def system_checks(theme):
-    command(['xcrun','simctl','ui',udid,'appearance','light'])
-    launch(theme,'system')
-    check(f'{theme}|system|light',f'{theme}-system-light')
-    command(['xcrun','simctl','ui',udid,'appearance','dark'])
-    check(f'{theme}|system|dark',f'{theme}-system-live-dark')
-    command(['xcrun','simctl','ui',udid,'appearance','light'])
-    check(f'{theme}|system|light',f'{theme}-system-live-light')
-
-def override_check(theme,system,mode):
-    command(['xcrun','simctl','ui',udid,'appearance',system])
-    launch(theme,mode)
-    check(f'{theme}|{mode}|{mode}',f'{theme}-override-{mode}-on-{system}-system')
+# tvOS simctl ui appearance is unsupported on this runtime (exit 45).
+# Do not relabel explicit overrides or a launch report as live System proof.
+system_coverage={
+    'live_system_toggle':'UNPROVEN',
+    'reason':'tvOS simulator rejects simctl ui appearance (exit 45); no host toggle executed',
+    'opposing_system_override':'UNPROVEN',
+    'explicit_light_dark_and_persistence':'covered separately by the scenarios below'
+}
+(out/'system-coverage.json').write_text(json.dumps(system_coverage,indent=2))
 
 for theme in ['horizon','slate']:
     for mode in ['light','dark']:
@@ -65,10 +61,7 @@ for theme in ['horizon','slate']:
             scenario(name,lambda:launch_and_check(theme,mode,screen,items,name,f'{theme}|{mode}|{mode}'))
         name=f'{theme}-{mode}-persisted-relaunch'
         scenario(name,lambda:launch_and_check(None,None,'home',1,name,f'{theme}|{mode}|{mode}'))
-    scenario(f'{theme}-live-system',lambda:system_checks(theme))
-    scenario(f'{theme}-dark-override',lambda:override_check(theme,'light','dark'))
-    scenario(f'{theme}-light-override',lambda:override_check(theme,'dark','light'))
 terminate()
 (out/'capture-failures.json').write_text(json.dumps(failures,indent=2))
 if failures: raise AssertionError(f'{len(failures)} capture/state scenarios failed; all four looks attempted; see capture-failures.json')
-print('All four rendered looks, persisted relaunch and live System inheritance assertions passed')
+print('All four explicit Light/Dark looks and persisted relaunch assertions passed. Live System toggling and opposing-system overrides remain UNPROVEN; see system-coverage.json.')
