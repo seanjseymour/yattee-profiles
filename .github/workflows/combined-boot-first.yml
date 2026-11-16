@@ -1,0 +1,118 @@
+name: Combined viewer boot-first evidence
+'on':
+  push:
+    branches:
+    - validation/combined-boot-first-c4fe5578
+permissions:
+  contents: read
+concurrency:
+  group: combined-viewer-evidence
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: source
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        path: control
+        persist-credentials: false
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: a5424bc75667bd59e3d9997c937dc3c7c4727a09
+        path: source
+        persist-credentials: false
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: c4fe5578dd6624315f5c285539774be4a7b50b9c
+        path: candidate
+        persist-credentials: false
+    - name: Initialize runner-local paths
+      run: |
+        set -euo pipefail
+        {
+          echo "CI_OUTPUT=$RUNNER_TEMP/yattee-ci-output"
+          echo "DERIVED_DATA=$RUNNER_TEMP/yattee-derived-data"
+          echo "PACKAGE_CACHE=$RUNNER_TEMP/yattee-source-packages"
+        } >> "$GITHUB_ENV"
+    - name: Verify toolchain and project
+      run: |
+        set -euo pipefail
+        mkdir -p "$CI_OUTPUT"
+        # Fail clearly if the hosted image no longer contains this stable Xcode.
+        test -d "$DEVELOPER_DIR"
+        test -f Yattee.xcodeproj/project.pbxproj
+        test -f Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+        {
+          sw_vers
+          uname -m
+          git rev-parse HEAD
+          xcodebuild -version
+          xcodebuild -showsdks
+        } 2>&1 | tee "$CI_OUTPUT/toolchain.log"
+    - name: Verify pinned evidence and production parity
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = a5424bc75667bd59e3d9997c937dc3c7c4727a09
+        test "$(git -C ../candidate rev-parse HEAD)" = c4fe5578dd6624315f5c285539774be4a7b50b9c
+        python3 ../control/scripts/boot-first/parity.py | tee "$CI_OUTPUT/parity.log"
+    - name: Boot and capture simulator before build
+      timeout-minutes: 4
+      run: python3 ../control/scripts/boot-first/boot.py
+    - name: Resolve pinned Swift packages
+      run: |
+        set -euo pipefail
+        xcodebuild -resolvePackageDependencies \
+          -project Yattee.xcodeproj \
+          -scheme Yattee \
+          -destination 'generic/platform=tvOS Simulator' \
+          -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+          -onlyUsePackageVersionsFromResolvedFile \
+          2>&1 | tee "$CI_OUTPUT/packages.log"
+        git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+    - name: Build simulator application and Top Shelf extension
+      run: |
+        set -euo pipefail
+        xcodebuild build \
+          -project Yattee.xcodeproj \
+          -scheme Yattee \
+          -configuration Debug \
+          -destination 'generic/platform=tvOS Simulator' \
+          -derivedDataPath "$DERIVED_DATA" \
+          -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+          -disableAutomaticPackageResolution \
+          -onlyUsePackageVersionsFromResolvedFile \
+          -resultBundlePath "$CI_OUTPUT/tvos-build.xcresult" \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY= \
+          2>&1 | tee "$CI_OUTPUT/build.log"
+    - name: Install once on validated simulator
+      timeout-minutes: 2
+      run: |-
+        xcrun simctl io "$TVOS_SIM_UDID" screenshot "$CI_OUTPUT/pre-install.png"
+        xcrun simctl install "$TVOS_SIM_UDID" "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app"
+    - name: Capture standalone Home Search Settings
+      timeout-minutes: 3
+      run: python3 ../control/scripts/boot-first/capture.py
+    - name: Run original remote and history adapter assertions
+      timeout-minutes: 12
+      run: bash ../control/scripts/boot-first/test.sh
+    - name: Preserve system and simulator evidence
+      if: always()
+      timeout-minutes: 3
+      run: python3 ../control/scripts/boot-first/diagnostics.py
+    - name: Preserve diagnostic logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: tvos-simulator-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/yattee-ci-output
+        if-no-files-found: warn
+        retention-days: 7
