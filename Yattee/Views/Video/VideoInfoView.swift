@@ -260,7 +260,7 @@ struct VideoInfoView: View {
     private var playButtonLabel: String {
         guard let video = displayedVideo,
               !video.isLive,
-              let savedProgress = dataManager?.watchProgress(for: video.id.videoID),
+              let savedProgress = dataManager?.watchProgress(for: video.id),
               savedProgress >= 5,
               video.duration > 0,
               savedProgress < video.duration * 0.9 else {
@@ -380,7 +380,7 @@ struct VideoInfoView: View {
                     bookmarkTags = []
                     bookmarkNote = ""
                 }
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
+                watchEntry = dataManager?.watchEntry(for: video.id)
             }
             loadComments()
             DispatchQueue.main.async {
@@ -437,7 +437,7 @@ struct VideoInfoView: View {
                     bookmarkTags = []
                     bookmarkNote = ""
                 }
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
+                watchEntry = dataManager?.watchEntry(for: video.id)
             }
             loadComments()
             DispatchQueue.main.async {
@@ -2574,7 +2574,7 @@ struct VideoInfoView: View {
             #else
             if let video = displayedVideo {
                 isBookmarked = dataManager?.isBookmarked(videoID: video.id.videoID) ?? false
-                watchEntry = dataManager?.watchEntry(for: video.id.videoID)
+                watchEntry = dataManager?.watchEntry(for: video.id)
             }
             loadComments()
             #endif
@@ -2606,7 +2606,7 @@ struct VideoInfoView: View {
         }
 
         // Get saved watch progress from database
-        let savedProgress = env.dataManager.watchProgress(for: video.id.videoID)
+        let savedProgress = env.dataManager.watchProgress(for: video.id)
         let videoDuration = video.duration
         // When duration is 0 (not yet loaded), use a large threshold to avoid false "completed" detection
         let completionThreshold = videoDuration > 0 ? videoDuration * 0.9 : Double.greatestFiniteMagnitude
@@ -2805,7 +2805,7 @@ struct VideoInfoView: View {
             bookmarkNote = ""
         }
         
-        watchEntry = dataManager?.watchEntry(for: video.id.videoID)
+        watchEntry = dataManager?.watchEntry(for: video.id)
         #if !os(tvOS)
         download = downloadManager?.download(for: video.id)
         #endif

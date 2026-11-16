@@ -163,7 +163,7 @@ struct VideoSwipeActionsModifier: ViewModifier {
     }
 
     private func watchedSwipeAction(action: VideoSwipeAction) -> SwipeAction {
-        let isWatched = appEnvironment?.dataManager.watchEntry(for: video.id.videoID)?.isFinished ?? false
+        let isWatched = appEnvironment?.dataManager.watchEntry(for: video.id)?.isFinished ?? false
 
         return SwipeAction(
             symbolImage: isWatched ? "eye.slash" : action.symbolImage,
@@ -171,7 +171,7 @@ struct VideoSwipeActionsModifier: ViewModifier {
             background: action.backgroundColor
         ) { reset in
             if isWatched {
-                appEnvironment?.dataManager.markAsUnwatched(videoID: video.id.videoID)
+                appEnvironment?.dataManager.markAsUnwatched(videoID: video.id)
             } else {
                 appEnvironment?.dataManager.markAsWatched(video: video)
             }

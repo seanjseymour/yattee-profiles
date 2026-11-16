@@ -168,7 +168,7 @@ struct TappableVideoModifier: ViewModifier {
             savedProgress = passedStartTime
         } else {
             // Query database for watch progress
-            savedProgress = env.dataManager.watchProgress(for: video.id.videoID)
+            savedProgress = env.dataManager.watchProgress(for: video.id)
         }
 
         let videoDuration = video.duration

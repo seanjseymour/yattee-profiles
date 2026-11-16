@@ -977,7 +977,7 @@ struct UnifiedPlaylistDetailView: View {
     }
 
     private func watchProgress(for video: Video) -> Double? {
-        guard let entry = watchEntriesMap[video.id.videoID] else { return nil }
+        guard let entry = watchEntriesMap[video.id.watchHistoryKey] else { return nil }
         let progress = entry.progress
         return progress > 0 && progress < 1 ? progress : nil
     }

@@ -174,7 +174,7 @@ struct ContinueWatchingView: View {
             loadHistory()
         }
         #if os(tvOS)
-        .onChange(of: inProgressEntries.first?.videoID, initial: true) { oldValue, newValue in
+        .onChange(of: inProgressEntries.first?.videoIdentifier.watchHistoryKey, initial: true) { oldValue, newValue in
             // Work around tvOS ScrollView + prefersDefaultFocus bug: set initial focus
             // to the first video after LazyVGrid has time to materialize cells.
             // Only on first population — later list changes are handled below.
@@ -188,7 +188,7 @@ struct ContinueWatchingView: View {
                 lastFocusedVideoID = newValue
             }
         }
-        .onChange(of: inProgressEntries.map(\.videoID)) { oldIDs, newIDs in
+        .onChange(of: inProgressEntries.map(\.videoIdentifier.watchHistoryKey)) { oldIDs, newIDs in
             // When the focused video is removed (marked watched / removed from
             // history), move focus to the entry that took its place, or the
             // previous one if it was last — otherwise focus is lost entirely.
@@ -239,7 +239,7 @@ struct ContinueWatchingView: View {
             Spacer()
                 .frame(height: 16)
         } content: {
-            ForEach(Array(inProgressEntries.enumerated()), id: \.element.videoID) { index, entry in
+            ForEach(Array(inProgressEntries.enumerated()), id: \.element.videoIdentifier.watchHistoryKey) { index, entry in
                 VideoListRow(
                     isLast: index == inProgressEntries.count - 1,
                     rowStyle: rowStyle,
@@ -248,7 +248,7 @@ struct ContinueWatchingView: View {
                     entryRowView(entry: entry, index: index)
                 }
                 #if os(tvOS)
-                .focused($focusedVideoID, equals: entry.videoID)
+                .focused($focusedVideoID, equals: entry.videoIdentifier.watchHistoryKey)
                 #else
                 .videoSwipeActions(
                     video: entry.toVideo(),
@@ -304,12 +304,12 @@ struct ContinueWatchingView: View {
     private var gridContent: some View {
         ScrollView {
             VideoGridContent(columns: gridConfig.effectiveColumns) {
-                ForEach(inProgressEntries, id: \.videoID) { entry in
+                ForEach(inProgressEntries, id: \.videoIdentifier.watchHistoryKey) { entry in
                     TappableContinueWatchingGridCard(entry: entry, onRemove: {
                         removeEntry(entry)
                     })
                     #if os(tvOS)
-                    .focused($focusedVideoID, equals: entry.videoID)
+                    .focused($focusedVideoID, equals: entry.videoIdentifier.watchHistoryKey)
                     #endif
                 }
             }
@@ -326,7 +326,7 @@ struct ContinueWatchingView: View {
     }
 
     private func removeEntry(_ entry: WatchEntry) {
-        dataManager?.removeFromHistory(videoID: entry.videoID)
+        dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
         loadHistory()
     }
 

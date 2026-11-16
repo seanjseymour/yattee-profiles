@@ -30,7 +30,7 @@ struct HistoryListView: View {
         /// video, as opposed to never having been answered yet.
         var metadataFailed = false
 
-        var id: String { videoID }
+        var id: String { video.id.watchHistoryKey }
 
         /// The video as the row shows it.
         ///
@@ -318,6 +318,13 @@ struct HistoryListView: View {
         // Above the list rather than inside it: the rows are local data while
         // this is showing, and nothing else on screen says so.
         .safeAreaInset(edge: .top, spacing: 0) {
+            #if os(tvOS)
+            if !displayMode.isLocal {
+                Text("Server-account history is shared. Resume progress belongs to the selected viewer.")
+                    .font(.callout)
+                    .padding()
+            }
+            #endif
             if let contextUnavailability {
                 DataContextUnavailableBanner(reason: contextUnavailability)
             }
@@ -406,6 +413,12 @@ struct HistoryListView: View {
             // change, and a local write is not news about it.
             if displayMode.isLocal {
                 loadHistory()
+            } else if dataManager?.viewerWatchStore != nil {
+                rows = rows.map { row in
+                    var updated = row
+                    updated.entry = dataManager?.watchEntry(for: row.video.id)
+                    return updated
+                }
             }
         }
         // Selecting another account — or local — changes whose history this is,
@@ -1058,7 +1071,7 @@ struct HistoryListView: View {
     private func remove(_ row: HistoryRow) {
         switch displayMode {
         case .local:
-            dataManager?.removeFromHistory(videoID: row.videoID)
+            dataManager?.removeFromHistory(videoID: row.video.id)
             loadHistory()
 
         case let .server(account):

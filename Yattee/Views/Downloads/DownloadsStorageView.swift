@@ -37,7 +37,7 @@ struct DownloadsStorageView: View {
     /// Downloads that have been fully watched.
     private var watchedDownloads: [Download] {
         completedDownloads.filter { download in
-            dataManager?.watchEntry(for: download.videoID.videoID)?.isFinished ?? false
+            dataManager?.watchEntry(for: download.videoID)?.isFinished ?? false
         }
     }
 
@@ -162,7 +162,7 @@ struct DownloadsStorageView: View {
     @ViewBuilder
     private func storageRow(_ download: Download, isLast: Bool) -> some View {
         let video = download.toVideo(downloadsDirectory: downloadManager?.downloadsDirectory())
-        let isWatched = dataManager?.watchEntry(for: download.videoID.videoID)?.isFinished ?? false
+        let isWatched = dataManager?.watchEntry(for: download.videoID)?.isFinished ?? false
 
         VideoListRow(
             isLast: isLast,

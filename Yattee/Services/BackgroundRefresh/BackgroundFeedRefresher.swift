@@ -420,7 +420,7 @@ final class BackgroundFeedRefresher {
             let originalCount = videosToNotify.count
 
             videosToNotify = videosToNotify.filter { item in
-                guard let entry = watchEntries[item.video.id.videoID] else {
+                guard let entry = watchEntries[item.video.id.watchHistoryKey] else {
                     // No watch entry - video hasn't been watched, include it
                     return true
                 }

@@ -17,7 +17,8 @@ extension DataManager {
     /// - Parameter isLive: Set by the player when the active stream is live but the
     ///   `Video` metadata does not say so (some sources hardcode `isLive: false`).
     ///   Live views are still recorded in history, but without a resume position.
-    func updateWatchProgressLocal(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false) {
+    func updateWatchProgressLocal(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil) {
+        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID) { return }
         let videoID = video.id.videoID
         let isLiveContent = video.isLive || isLive
         let descriptor = FetchDescriptor<WatchEntry>(
@@ -59,7 +60,8 @@ extension DataManager {
 
     /// Records or updates watch progress for a video and queues for iCloud sync.
     /// Use this when video closes or switches to sync the final progress.
-    func updateWatchProgress(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false) {
+    func updateWatchProgress(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil) {
+        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID) { return }
         // Find existing entry or create new one
         let videoID = video.id.videoID
         let isLiveContent = video.isLive || isLive
@@ -105,6 +107,7 @@ extension DataManager {
 
     /// Gets the watch progress for a video.
     func watchProgress(for videoID: String) -> TimeInterval? {
+        if viewerWatchStore != nil { return watchEntry(for: videoID)?.watchedSeconds }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.videoID == videoID }
         )
@@ -120,6 +123,15 @@ extension DataManager {
 
     /// Gets all watch history entries, most recent first.
     func watchHistory(limit: Int = 100) -> [WatchEntry] {
+        if let store = viewerWatchStore {
+            guard let owner = activeHistoryViewerID else { return [] }
+            return Array(store.history(viewerID: owner).prefix(max(0, limit))).compactMap(\.watchEntry)
+        }
+        return legacyWatchHistory(limit: limit)
+    }
+
+    /// Shared rows only. CloudKit must never enumerate viewer-local records.
+    func legacyWatchHistory(limit: Int = 100) -> [WatchEntry] {
         var descriptor = FetchDescriptor<WatchEntry>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
@@ -138,11 +150,15 @@ extension DataManager {
         let entries = watchHistory(limit: 10000)
         // The same video ID can be recorded under several source scopes; the
         // history is most recent first, so the first entry is the one to keep.
-        return Dictionary(entries.map { ($0.videoID, $0) }, uniquingKeysWith: { first, _ in first })
+        return Dictionary(entries.map { ($0.videoIdentifier.watchHistoryKey, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Gets the total count of watch history entries.
     func watchHistoryCount() -> Int {
+        if let store = viewerWatchStore {
+            guard let owner = activeHistoryViewerID else { return 0 }
+            return store.history(viewerID: owner).count
+        }
         let descriptor = FetchDescriptor<WatchEntry>()
         do {
             return try modelContext.fetchCount(descriptor)
@@ -153,6 +169,10 @@ extension DataManager {
 
     /// Gets the watch entry for a specific video ID.
     func watchEntry(for videoID: String) -> WatchEntry? {
+        if let store = viewerWatchStore {
+            guard let owner = activeHistoryViewerID else { return nil }
+            return store.history(viewerID: owner).first { $0.videoID == videoID }?.watchEntry
+        }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.videoID == videoID }
         )
@@ -210,6 +230,7 @@ extension DataManager {
 
     /// Clears all watch history.
     func clearWatchHistory() {
+        if removeViewerHistory(matching: { _ in true }) { return }
         let descriptor = FetchDescriptor<WatchEntry>()
 
         do {
@@ -244,6 +265,7 @@ extension DataManager {
     /// Clears watch history entries updated after a given date.
     /// Used for time-based clearing (e.g., "clear last hour").
     func clearWatchHistory(since date: Date) {
+        if removeViewerHistory(matching: { $0.updatedAt >= date }) { return }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.updatedAt >= date }
         )
@@ -280,6 +302,7 @@ extension DataManager {
     /// Clears watch history entries older than a given date.
     /// Used for auto-cleanup of old history.
     func clearWatchHistory(olderThan date: Date) {
+        if removeViewerHistory(matching: { $0.updatedAt < date }) { return }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.updatedAt < date }
         )
@@ -315,6 +338,7 @@ extension DataManager {
 
     /// Removes a specific watch entry.
     func removeFromHistory(videoID: String) {
+        if removeViewerHistory(matching: { $0.videoID == videoID }) { return }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.videoID == videoID }
         )
@@ -349,6 +373,7 @@ extension DataManager {
 
     /// Marks a video as watched by creating or updating a WatchEntry with isFinished = true.
     func markAsWatched(video: Video) {
+        if saveViewerProgress(for: video, seconds: max(0, video.duration), duration: video.duration, isLive: video.isLive, viewerID: nil, finished: true) { return }
         let videoID = video.id.videoID
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { $0.videoID == videoID }
@@ -397,6 +422,7 @@ extension DataManager {
 
     /// Clears all in-progress (not finished, watched > 10 seconds) watch entries.
     func clearInProgressHistory() {
+        if removeViewerHistory(matching: { !$0.finished && !$0.live && $0.seconds > 10 }) { return }
         let descriptor = FetchDescriptor<WatchEntry>(
             predicate: #Predicate { !$0.isFinished && $0.watchedSeconds > 10 }
         )

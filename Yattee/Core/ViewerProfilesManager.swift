@@ -8,6 +8,10 @@
 import Foundation
 import Observation
 
+extension Notification.Name {
+    static let viewerDidChange = Notification.Name("yatteeProfiles.viewerDidChange")
+}
+
 enum ViewerProfileError: Error, LocalizedError, Equatable, Sendable {
     case invalidName
     case duplicateName
@@ -105,6 +109,8 @@ final class ViewerProfilesManager {
     func select(id: UUID) throws {
         guard profiles.contains(where: { $0.id == id }) else { throw ViewerProfileError.missingViewer }
         try commit(profiles: profiles, activeID: id)
+        NotificationCenter.default.post(name: .viewerDidChange, object: nil)
+        NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
     }
 
     private static func normalizedName(_ name: String) -> String {
