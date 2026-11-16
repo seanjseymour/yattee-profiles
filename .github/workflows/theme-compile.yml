@@ -1,0 +1,107 @@
+name: Horizon Slate unsigned reusable simulator apps
+'on':
+  push:
+    branches: [validation/horizon-slate-compile-cc2b4ad6]
+permissions:
+  contents: read
+concurrency:
+  group: horizon-slate-compile-only
+  cancel-in-progress: false
+jobs:
+  compile:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+        working-directory: source
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 93e2838b250541e9b5af26d73524dbc79877a5b0
+          path: fixture
+          persist-credentials: false
+      - name: Initialize paths and prove pure production-source parity
+        run: |
+          set -euo pipefail
+          echo "CI_OUTPUT=$RUNNER_TEMP/theme-compile-output" >> "$GITHUB_ENV"
+          echo "DERIVED_DATA=$RUNNER_TEMP/theme-compile-derived" >> "$GITHUB_ENV"
+          echo "PACKAGE_CACHE=$RUNNER_TEMP/theme-compile-packages" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/theme-compile-output"
+          test -d "$DEVELOPER_DIR"
+          test "$(git rev-parse 7563cac5276b8926a98e4fc665a1bdb54fd89135^{tree})" = 53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47
+          git diff --exit-code 7563cac5276b8926a98e4fc665a1bdb54fd89135 HEAD -- Yattee YatteeTests YatteeTopShelf Yattee.xcodeproj
+          { git rev-parse HEAD; sw_vers; uname -m; xcodebuild -version; } | tee "$RUNNER_TEMP/theme-compile-output/source-and-toolchain.log"
+      - name: Resolve pinned packages without booting a simulator
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project Yattee.xcodeproj -scheme Yattee \
+            -destination 'generic/platform=tvOS Simulator' -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+            -onlyUsePackageVersionsFromResolvedFile 2>&1 | tee "$CI_OUTPUT/packages.log"
+          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Compile exact clean candidate and Top Shelf unsigned arm64
+        id: clean
+        run: |
+          set -euo pipefail
+          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/clean-build.xcresult" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/clean-build.log"
+          tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/clean-candidate-app.tar.gz" Yattee.app
+          shasum -a 256 "$CI_OUTPUT/clean-candidate-app.tar.gz" | tee "$CI_OUTPUT/clean-app.sha256"
+      - name: Overlay only audited simulator-fixture deltas
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil,subprocess,json
+          files=['Yattee/Core/AppEnvironment.swift','Yattee/Services/CloudKit/CloudKitAvailability.swift','Yattee/Testing/ViewerFocusUITestFixture.swift','Yattee/Views/Profiles/TVViewerRoot.swift','Yattee/Views/Home/TVContinueWatchingShelf.swift']
+          for name in files:
+              target=Path(name);target.parent.mkdir(parents=True,exist_ok=True)
+              shutil.copy2(Path('../fixture')/name,target)
+          existing=set(subprocess.check_output(['git','diff','--name-only','--','Yattee'],text=True).splitlines())
+          added=set(subprocess.check_output(['git','ls-files','--others','--exclude-standard','Yattee'],text=True).splitlines())
+          assert existing|added==set(files),(existing,added)
+          print('Only five synthetic simulator fixture deltas:',files)
+          PY
+      - name: Incrementally compile reusable synthetic test app
+        id: fixture
+        run: |
+          set -euo pipefail
+          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/fixture-build.xcresult" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/fixture-build.log"
+          tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/synthetic-fixture-app.tar.gz" Yattee.app
+          shasum -a 256 "$CI_OUTPUT/synthetic-fixture-app.tar.gz" | tee "$CI_OUTPUT/fixture-app.sha256"
+          cat > "$CI_OUTPUT/source-manifest.json" <<'JSON'
+          {"production_local_commit":"cc2b4ad6315dd673c221786a92f85f3079b19417","production_remote_commit":"7563cac5276b8926a98e4fc665a1bdb54fd89135","production_tree":"53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47","fixture_source_commit":"93e2838b250541e9b5af26d73524dbc79877a5b0","architecture":"arm64","signing":false,"runtime_tests_executed":false}
+          JSON
+      - name: Record separate outcomes
+        if: always()
+        run: |
+          {
+            echo '## Compilation only, no simulator boot'
+            echo 'Clean source and Top Shelf compile: ${{ steps.clean.outcome }}'
+            echo 'Incremental synthetic fixture compile: ${{ steps.fixture.outcome }}'
+            echo 'Source tree 53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47. No signing or deployment.'
+            echo 'Apps preserved for later runtime jobs; compilation is not remote or visual approval.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: theme-unsigned-apps-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/theme-compile-output
+          retention-days: 7
+          if-no-files-found: warn
