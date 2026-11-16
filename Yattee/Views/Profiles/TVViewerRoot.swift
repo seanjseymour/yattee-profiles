@@ -20,6 +20,9 @@ private struct TVViewerRoot: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .focusSection()
+            #if DEBUG && targetEnvironment(simulator)
+            .overlay(alignment: .bottomLeading) { ThemeValidationState() }
+            #endif
             .safeAreaInset(edge: .top, spacing: 24) {
                 header
             }

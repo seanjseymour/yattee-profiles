@@ -1,0 +1,102 @@
+name: Horizon Slate unsigned native validation
+'on':
+  push:
+    branches: [validation/horizon-slate-1cf40497]
+permissions:
+  contents: read
+concurrency:
+  group: horizon-slate-native-validation
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Initialize unsigned evidence paths
+        run: |
+          set -euo pipefail
+          echo "CI_OUTPUT=$RUNNER_TEMP/theme-output" >> "$GITHUB_ENV"
+          echo "DERIVED_DATA=$RUNNER_TEMP/theme-derived-data" >> "$GITHUB_ENV"
+          echo "PACKAGE_CACHE=$RUNNER_TEMP/theme-source-packages" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/theme-output"
+      - name: Verify exact candidate tree and fixture-only delta
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          python3 scripts/theme-validation/parity.py | tee "$CI_OUTPUT/parity.log"
+          { sw_vers; uname -m; xcodebuild -version; xcodebuild -showsdks; } | tee "$CI_OUTPUT/toolchain.log"
+      - name: Prove stable boot and screenshots before any compile
+        timeout-minutes: 4
+        run: python3 scripts/theme-validation/boot.py
+      - name: Resolve pinned packages
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project Yattee.xcodeproj -scheme Yattee \
+            -destination 'generic/platform=tvOS Simulator' \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -onlyUsePackageVersionsFromResolvedFile \
+            2>&1 | tee "$CI_OUTPUT/packages.log"
+          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Build exact app plus isolated fixture and Top Shelf unsigned
+        id: build
+        run: |
+          set -euo pipefail
+          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/theme-build.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/build.log"
+      - name: Verify boot still alive and install once
+        id: install
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          xcrun simctl io "$TVOS_SIM_UDID" screenshot "$CI_OUTPUT/pre-install.png"
+          xcrun simctl install "$TVOS_SIM_UDID" "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app"
+      - name: Capture four looks and assert persisted modes and live System inheritance
+        id: capture
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 6
+        run: python3 scripts/theme-validation/capture.py
+      - name: Exercise remote navigation and capture focused states
+        id: remote
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 15
+        run: bash scripts/theme-validation/remote-tests.sh
+      - name: Run exact preference Swift tests
+        id: preferences
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        timeout-minutes: 10
+        run: bash scripts/theme-validation/unit-tests.sh
+      - name: Preserve system and simulator diagnostics
+        if: always()
+        timeout-minutes: 3
+        run: python3 scripts/theme-validation/diagnostics.py
+      - name: Record outcomes without claiming visual approval
+        if: always()
+        run: |
+          {
+            echo '## Isolated Horizon / Slate candidate'
+            echo 'Source tree: ab0a550213b591dcc69d57650aeca6b307989ded (local 1cf40497; remote 99b6de08).'
+            echo 'Five fixture-only app deltas are printed in parity.log. No signing or release.'
+            echo 'Build: ${{ steps.build.outcome }}; installation: ${{ steps.install.outcome }}'
+            echo 'Appearance captures/assertions: ${{ steps.capture.outcome }}'
+            echo 'Remote checks: ${{ steps.remote.outcome }}; preference tests: ${{ steps.preferences.outcome }}'
+            echo 'Actual screenshots require independent visual review; a green run is not visual approval.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: theme-native-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/theme-output
+          retention-days: 7
+          if-no-files-found: warn

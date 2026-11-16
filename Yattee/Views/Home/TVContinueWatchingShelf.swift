@@ -63,6 +63,7 @@ struct TVContinueWatchingShelf: View {
                         loadMoreVideos: loadMoreVideos
                     )
                     .modifier(TVDesignCardFocus())
+                    .accessibilityIdentifier("home.video.\(entry.videoID)")
             }
         }
         .padding(12)
