@@ -131,7 +131,10 @@ final class ViewerRemoteUITests: XCTestCase {
     private func checkSearchControls(viewerName: String) {
         launch(items: 0, search: true, viewerName: viewerName)
         let options = app.buttons["View Options"]
-        focusInitialContent(options)
+        let field = app.textFields.firstMatch
+        focusInitialContent(field)
+        remote.press(.right)
+        focused(options)
         XCTAssertLessThan(launcher.frame.maxY + 12, options.frame.minY)
         let unfocused = XCTAttachment(screenshot: app.screenshot())
         unfocused.name = "Search — Viewer unfocused"
