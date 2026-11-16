@@ -82,13 +82,18 @@ jobs:
             CODE_SIGN_IDENTITY= \
             2>&1 | tee "$CI_OUTPUT/build.log"
 
+      - name: Test viewer navigation with an unsigned tvOS remote
+        timeout-minutes: 15
+        run: bash scripts/tvos-focus-ui/run.sh
+
       - name: Summarize scope
         if: always()
         run: |
           {
             echo '## tvOS simulator baseline'
             echo '- Unsigned build only. No TestFlight upload or Apple account access.'
-            echo '- No simulator launch, UI tests, physical-device tests, or playback verification.'
+            echo '- Viewer remote UI tests run on a disposable simulator; inspect their separate result.'
+            echo '- No physical-device or playback verification.'
             echo '- Inspect the build step outcome and attached diagnostics before calling the build successful.'
           } >> "$GITHUB_STEP_SUMMARY"
 

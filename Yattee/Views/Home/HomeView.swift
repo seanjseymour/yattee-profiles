@@ -409,6 +409,7 @@ struct HomeView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
             }
+            .accessibilityIdentifier("home.empty.openSources")
         }
         .padding(60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -41,6 +41,7 @@ struct HomeHorizontalCards: View {
                             videoIndex: index,
                             loadMoreVideos: loadMoreVideos
                         )
+                        .accessibilityIdentifier("home.video.\(video.id.videoID)")
                 }
             }
             .padding(.horizontal)

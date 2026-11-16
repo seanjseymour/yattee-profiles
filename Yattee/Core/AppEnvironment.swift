@@ -140,7 +140,18 @@ final class AppEnvironment {
     /// whose `activeDownloads` is empty (the finished file is then dropped).
     /// Referencing this `static let` from the App's `@State` guarantees exactly
     /// one instance for the lifetime of the process.
-    static let shared = AppEnvironment()
+    static let shared: AppEnvironment = {
+        #if DEBUG && os(tvOS) && targetEnvironment(simulator)
+        if let count = ViewerFocusUITestFixture.itemCount {
+            // Explicit UI-test opt-in on a simulator only. Never touches the
+            // on-disk history store or appears in a device/release build.
+            let environment = AppEnvironment(dataManager: try! DataManager(inMemory: true))
+            ViewerFocusUITestFixture.configure(environment, itemCount: count)
+            return environment
+        }
+        #endif
+        return AppEnvironment()
+    }()
 
     // MARK: - Initialization
 
