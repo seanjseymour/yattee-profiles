@@ -1170,7 +1170,11 @@ final class PlayerService {
         currentPlayTask?.cancel()
 
         if dataManager.viewerWatchStore != nil {
-            saveProgressAndSync()
+            if !videoEndedNaturally { saveProgressAndSync() }
+            progressSaveTimer?.invalidate()
+            progressSaveTimer = nil
+            // Same-video openings don't reset PlayerState's clock themselves.
+            state.currentTime = 0
             viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
             lastSavedProgress = nil
         }
@@ -1224,7 +1228,11 @@ final class PlayerService {
         currentPlayTask?.cancel()
 
         if dataManager.viewerWatchStore != nil {
-            saveProgressAndSync()
+            if !videoEndedNaturally { saveProgressAndSync() }
+            progressSaveTimer?.invalidate()
+            progressSaveTimer = nil
+            // Same-video openings don't reset PlayerState's clock themselves.
+            state.currentTime = 0
             viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
             lastSavedProgress = nil
         }
@@ -2497,6 +2505,12 @@ final class PlayerService {
         return 0
     }
 
+    private func acceptsViewerCallback(from backend: any PlayerBackend) -> Bool {
+        dataManager.viewerWatchStore == nil ||
+            (currentBackend === backend && backendViewerID == viewerPlaybackOwnership.session?.viewerID &&
+             viewerPlaybackOwnership.session != nil)
+    }
+
     private func ensureBackend(type: PlayerBackendType) async throws -> any PlayerBackend {
         // Reuse existing backend if same type
         if let current = currentBackend, current.backendType == type,
@@ -3086,6 +3100,7 @@ final class PlayerService {
 
 extension PlayerService: PlayerBackendDelegate {
     func backend(_ backend: any PlayerBackend, didUpdateTime time: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Ignore time updates while loading a new video - these are stale updates from the previous video
         guard currentBackend === backend, loadingVideoID == nil else { return }
 
@@ -3108,6 +3123,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateDuration duration: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Skip duration updates when locked from API (fast endpoint streams where
         // file is progressively downloaded and MPV can't determine accurate duration)
         guard !state.isDurationLockedFromAPI else { return }
@@ -3115,6 +3131,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didChangeState playbackState: PlaybackState) {
+        guard acceptsViewerCallback(from: backend) else { return }
         LoggingService.shared.debug("Backend state changed to: \(playbackState)", category: .player)
 
         // Clear the time-update gate once the new video is loaded, in case the load
@@ -3133,10 +3150,12 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateBufferedTime time: TimeInterval) {
+        guard acceptsViewerCallback(from: backend) else { return }
         state.bufferedTime = time
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateBufferProgress progress: Int) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // Only update during initial buffering (before buffer is ready)
         // Skip buffer progress for local files - they load quickly and don't need buffering indicator
         let isLocalFile = state.currentStream?.url.isFileURL == true
@@ -3146,6 +3165,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateVideoSize width: Int, height: Int) {
+        guard acceptsViewerCallback(from: backend) else { return }
         guard width > 0, height > 0 else { return }
         let aspectRatio = Double(width) / Double(height)
 
@@ -3154,6 +3174,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateRetryState currentRetry: Int, maxRetries: Int, isRetrying: Bool, exhausted: Bool) {
+        guard acceptsViewerCallback(from: backend) else { return }
         let retryState = RetryState(
             currentRetry: currentRetry,
             maxRetries: maxRetries,
@@ -3164,11 +3185,13 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backend(_ backend: any PlayerBackend, didUpdateTracks tracks: [MPVTrack]) {
+        guard acceptsViewerCallback(from: backend) else { return }
         embeddedTracks = tracks
         reapplyOrAutoSelectEmbeddedTracks()
     }
 
     func backend(_ backend: any PlayerBackend, didRequestStreamRefresh atTime: TimeInterval?) {
+        guard acceptsViewerCallback(from: backend) else { return }
         LoggingService.shared.logPlayer("Stream refresh requested at time: \(atTime ?? -1)")
 
         Task {
@@ -3177,11 +3200,13 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backendDidBecomeReady(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
         // First frame of new video has been rendered - thumbnail can now hide
         state.isFirstFrameReady = true
     }
 
     func backendDidFallBackToSoftwareDecoding(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
         toastManager?.show(
             category: .playerStatus,
             title: String(localized: "toast.player.hwdecFallback.title"),
@@ -3193,6 +3218,7 @@ extension PlayerService: PlayerBackendDelegate {
     }
 
     func backendDidFinishPlaying(_ backend: any PlayerBackend) {
+        guard acceptsViewerCallback(from: backend) else { return }
         guard currentBackend === backend, loadingVideoID == nil,
               state.currentVideo != nil else { return }
         // Mark that video ended naturally - prevents play() from saving progress again
