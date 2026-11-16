@@ -135,6 +135,7 @@ final class ViewerRemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Alpha"].waitForExistence(timeout: 5))
         remote.press(.menu)
         focused(launcher)
+        XCTAssertTrue(row.exists, "Picker Back must stay on Settings")
         remote.press(.menu)
         XCTAssertTrue(app.buttons["home.empty.openSources"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertEqual(app.state, .runningForeground)
