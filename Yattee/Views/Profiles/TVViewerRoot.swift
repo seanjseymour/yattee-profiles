@@ -16,13 +16,18 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Native directional focus visits content tiles before this
-            // adjacent, full-height trailing region. Both regions participate
-            // so Left from the launcher can return to content below its height.
             .focusSection()
+            // Give every root one dedicated viewer header. The content keeps
+            // its full width; Search controls and Settings rows start below it.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear
+                    .frame(height: 100)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .safeAreaInset(edge: .trailing, spacing: 0) {
                 if let viewers = appEnvironment?.viewerProfilesManager {
-                    VStack {
+                    VStack(alignment: .trailing) {
                         Button {
                             showingPicker = true
                         } label: {
@@ -37,12 +42,17 @@ private struct TVViewerRoot: ViewModifier {
                         .if(router.selection != .home) { button in
                             button.onExitCommand { router.select(.home) }
                         }
+                        .frame(width: 300)
                         Spacer(minLength: 0)
                     }
-                    .frame(width: 300)
+                    // Only the narrow gutter is reserved beside content. The
+                    // header button extends left into the empty header above.
+                    .frame(width: 60, alignment: .trailing)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
                     .padding(.vertical, 12)
+                    // Keep the focus region adjacent, not layered over the
+                    // content: overlapping regions don't connect on tvOS.
                     .focusSection()
                 }
             }
