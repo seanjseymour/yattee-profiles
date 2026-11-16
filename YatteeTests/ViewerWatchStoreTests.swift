@@ -100,6 +100,51 @@ struct ViewerWatchStoreTests {
         #expect(recovered.recoveryWasPartial, "Saving again must not erase the partial-recovery notice")
     }
 
+    @Test func removalRevokesOnlyMatchingPlaybackPermits() throws {
+        let (url, defaults, suite) = fixture()
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let a = UUID(), b = UUID()
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
+        let old = store.writePermit(viewerID: a, key: "source-A/video")
+        let otherSource = store.writePermit(viewerID: a, key: "source-B/video")
+        let otherViewer = store.writePermit(viewerID: b, key: "source-A/video")
+        try store.save(record(a, seconds: 111))
+        try store.remove(viewerID: a) { $0.key == "source-A/video" }
+        #expect(!store.accepts(old))
+        #expect(store.accepts(otherSource))
+        #expect(store.accepts(otherViewer))
+        let reopened = store.writePermit(viewerID: a, key: "source-A/video")
+        #expect(store.accepts(reopened))
+        #expect(!store.accepts(old))
+        // Clear also revokes openings that have not yet written a row.
+        try store.remove(viewerID: a, invalidateAll: true) { _ in true }
+        #expect(!store.accepts(reopened))
+        #expect(!store.accepts(otherSource))
+        #expect(store.accepts(otherViewer))
+    }
+
+    @Test func recoverySharesCapacityAndPrioritizesResume() throws {
+        let (url, defaults, suite) = fixture()
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let a = UUID(), b = UUID()
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
+        var inactive = record(b, seconds: 45, date: .distantPast)
+        inactive.title = String(repeating: "b", count: 8000)
+        try store.save(inactive)
+        for index in 0..<22 {
+            var busy = record(a, key: "source/\(index)", seconds: 600)
+            busy.finished = true
+            busy.title = String(repeating: "a", count: 8000)
+            try store.save(busy)
+        }
+        try store.save(record(a, key: "active-resume", seconds: 70, date: .distantPast))
+        try FileManager.default.removeItem(at: url)
+        let restored = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
+        #expect(restored.record(viewerID: b, key: "source-A/video")?.seconds == 45)
+        #expect(restored.record(viewerID: a, key: "active-resume")?.seconds == 70)
+        #expect(restored.recoveryWasPartial)
+    }
+
     @Test func legacyAndUnknownNewerBytesAreNeverReplaced() throws {
         let (url, defaults, suite) = fixture()
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

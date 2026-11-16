@@ -54,15 +54,15 @@ The full viewer history is a separate versioned JSON file under Library/Caches,
 written atomically. It never falls back silently to an in-memory history store.
 Unreadable or newer-version bytes are preserved and writes fail closed.
 
-A separate defaults key holds at most 20 recent records per viewer and at most
-128 KiB total. Older records remain in the primary file; they are not deleted to
+A separate defaults key holds at most 20 records per viewer and at most
+128 KiB total. Selection rotates across viewers and prioritizes unfinished resume records within each viewer. These are maxima, not a guaranteed allocation: oversized records or sufficiently many viewers can still exhaust the byte budget. Older records remain in the primary file; they are not deleted to
 fit the recovery snapshot. Projected app defaults must stay below 384 KiB or the
 save is rejected with a visible warning. Nothing changes the existing defaults
 keys. This is bounded resume recovery, not an unbounded defaults history blob.
 
 If the primary cache disappears, restore the recovery snapshot and explicitly
 report whether recovery was partial. Cache recovery may lose older records;
-defaults writes are asynchronous, so it is not a crash-proof transaction or a
+removals stage the reduced recovery snapshot before the primary commit, but defaults writes are asynchronous. Abrupt interruption followed by cache purge can still restore an older persisted snapshot, including a removed row. Avoiding that requires a durable external store or disabling recovery after uncertain shutdown; this implementation does not claim that guarantee. It is not a crash-proof transaction or a
 reinstall/device-loss backup. No cloud recovery is added or enabled.
 
 **Product decision before release:** accept the 20-per-viewer / 128-KiB recent
@@ -88,3 +88,15 @@ candidate. No real NAS/history, credentials or account writes belong in CI.
 Reviewer must inspect the source-aware compatibility adapters, CloudKit initial
 upload boundary, stale-session/backend guards, and storage error/partial-recovery
 UI. Import is deliberately deferred, not silently assigned to Leslie or Sean.
+
+## Removal versus open playback
+
+Each playback opening captures a write permit scoped to viewer UUID and full
+source/video key. Successful remove/mark-unwatched revokes matching permits;
+clear-all also revokes openings that have not written a row yet. Date-based clear
+revokes permits for the rows it removes. Quality retries retain revoked permits;
+periodic, completion and final adapter writes reject them. An intentional new
+opening acquires a fresh permit. Other viewers and sources remain valid.
+
+This prevents in-process resurrection by paused or delayed players. It does not
+turn the asynchronous defaults backup into a crash-safe deletion journal.

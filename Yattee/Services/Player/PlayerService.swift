@@ -135,6 +135,8 @@ final class PlayerService {
     private var lastSavedProgress: (videoID: String, seconds: TimeInterval)?
     private var viewerPlaybackOwnership = ViewerPlaybackOwnership()
     private var backendViewerID: UUID?
+    private var viewerWritePermit: ViewerWatchStore.WritePermit?
+    private var permitSessionID: UUID?
 
     /// Now Playing service for Control Center/Lock Screen.
     private let nowPlayingService = NowPlayingService()
@@ -279,6 +281,11 @@ final class PlayerService {
 
         if dataManager.viewerWatchStore != nil {
             viewerPlaybackOwnership.load(viewerID: dataManager.activeHistoryViewerID)
+        }
+        if let store = dataManager.viewerWatchStore, let session = viewerPlaybackOwnership.session,
+           permitSessionID != session.id || viewerWritePermit?.key != video.id.watchHistoryKey {
+            viewerWritePermit = store.writePermit(viewerID: session.viewerID, key: video.id.watchHistoryKey)
+            permitSessionID = session.id
         }
         let resumeViewerID = viewerPlaybackOwnership.session?.viewerID
 
@@ -1159,7 +1166,8 @@ final class PlayerService {
 
         // If this video is already loaded, optionally seek/resume instead of reloading.
         if isCurrentlyPlaying(video: video),
-           dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID {
+           dataManager.viewerWatchStore == nil || (viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID &&
+            viewerWritePermit.map { dataManager.viewerWatchStore?.accepts($0) == true } == true) {
             LoggingService.shared.logPlayer("Video already loaded, applying seek/resume instead of reload (startTime=\(startTime ?? -1), state=\(state.playbackState))")
             if !mpvPiPActive {
                 navigationCoordinator?.expandPlayer()
@@ -1226,7 +1234,8 @@ final class PlayerService {
 
         // If this video is already loaded, optionally resume instead of reloading.
         if isCurrentlyPlaying(video: video),
-           dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID {
+           dataManager.viewerWatchStore == nil || (viewerPlaybackOwnership.session?.viewerID == dataManager.activeHistoryViewerID &&
+            viewerWritePermit.map { dataManager.viewerWatchStore?.accepts($0) == true } == true) {
             if !mpvPiPActive {
                 navigationCoordinator?.expandPlayer()
             }
@@ -2860,7 +2869,8 @@ final class PlayerService {
     }
 
     private func saveProgress() {
-        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
+        guard dataManager.viewerWatchStore == nil || (viewerPlaybackOwnership.session != nil &&
+            viewerWritePermit.map { dataManager.viewerWatchStore?.accepts($0) == true } == true) else { return }
         PerfCounter.count("player.progressSave")
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false else { return }
@@ -2892,7 +2902,7 @@ final class PlayerService {
             }
         }
         #endif
-        dataManager.updateWatchProgressLocal(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID)
+        dataManager.updateWatchProgressLocal(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID, writePermit: viewerWritePermit)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
 
         // Update Handoff activity with current playback time
@@ -2902,7 +2912,8 @@ final class PlayerService {
     /// Saves progress as 100% completed when video finishes naturally.
     /// This ensures the watch history shows full completion instead of ~99%.
     private func saveProgressAsCompleted() {
-        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
+        guard dataManager.viewerWatchStore == nil || (viewerPlaybackOwnership.session != nil &&
+            viewerWritePermit.map { dataManager.viewerWatchStore?.accepts($0) == true } == true) else { return }
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false,
               let video = state.currentVideo else { return }
@@ -2920,7 +2931,7 @@ final class PlayerService {
         // Save the full duration as watched time and queue for iCloud sync.
         // This is the only save for a naturally finished video — play() skips
         // saveProgressAndSync() when videoEndedNaturally is set.
-        dataManager.updateWatchProgress(for: video, seconds: completedDuration, duration: completedDuration, viewerID: viewerPlaybackOwnership.session?.viewerID)
+        dataManager.updateWatchProgress(for: video, seconds: completedDuration, duration: completedDuration, viewerID: viewerPlaybackOwnership.session?.viewerID, writePermit: viewerWritePermit)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
 
         // Update Handoff activity with completed time
@@ -2930,7 +2941,8 @@ final class PlayerService {
     /// Saves progress and triggers iCloud sync for watch history.
     /// Call this when video playback ends or switches to a different video.
     private func saveProgressAndSync() {
-        guard dataManager.viewerWatchStore == nil || viewerPlaybackOwnership.session != nil else { return }
+        guard dataManager.viewerWatchStore == nil || (viewerPlaybackOwnership.session != nil &&
+            viewerWritePermit.map { dataManager.viewerWatchStore?.accepts($0) == true } == true) else { return }
         guard settingsManager?.incognitoModeEnabled != true,
               settingsManager?.saveWatchHistory != false else { return }
 
@@ -2938,7 +2950,7 @@ final class PlayerService {
               state.currentTime > 0 else { return }
 
         // Save and queue for iCloud sync (used when video closes/switches)
-        dataManager.updateWatchProgress(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID)
+        dataManager.updateWatchProgress(for: video, seconds: state.currentTime, duration: state.duration, isLive: state.isLive, viewerID: viewerPlaybackOwnership.session?.viewerID, writePermit: viewerWritePermit)
         watchHistorySyncService?.recordProgress(videoID: video.id.videoID)
         NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
     }
