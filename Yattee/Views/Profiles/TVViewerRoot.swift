@@ -73,7 +73,7 @@ private struct TVViewerRoot: ViewModifier {
                             .font(.callout)
                             .padding()
                     } else if history.recoveredFromCacheLoss {
-                        Text(history.recoveryIsLimited
+                        Text(history.recoveryWasPartial
                              ? "Recent viewer progress was recovered. Older device-local history is no longer available."
                              : "Viewer progress was recovered after local cache loss.")
                             .font(.callout)

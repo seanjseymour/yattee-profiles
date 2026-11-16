@@ -52,6 +52,7 @@ final class ViewerWatchStore {
 
     private(set) var records: [ViewerWatchRecord] = []
     private(set) var recoveredFromCacheLoss = false
+    private(set) var recoveryWasPartial = false
     private(set) var recoveryIsLimited = false
     private(set) var failure: ViewerWatchStoreError?
     @ObservationIgnored private let fileURL: URL
@@ -82,6 +83,7 @@ final class ViewerWatchStore {
             return
         }
         records = snapshot.records
+        recoveryWasPartial = recoveredFromCacheLoss && snapshot.incompleteRecovery
         recoveryIsLimited = snapshot.incompleteRecovery
         if !recoveredFromCacheLoss,
            let backup = defaults.data(forKey: Self.recoveryKey),
