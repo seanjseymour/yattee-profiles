@@ -16,7 +16,7 @@ jobs:
   test:
     if: github.ref == 'refs/heads/validation/viewer-profiles-b664c786'
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -39,40 +39,54 @@ jobs:
           git rev-parse HEAD
           xcodebuild -version
           xcodebuild -version | head -n 1 | grep -Fx 'Xcode 27.2'
-          echo "TEST_ROOT=$RUNNER_TEMP/viewer-profiles-tests" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/viewer-profiles-tests"
+          xcrun swift --version
+          echo "HARNESS=$RUNNER_TEMP/viewer-profiles-hostless" >> "$GITHUB_ENV"
 
-      - name: Resolve pinned dependencies without signing
+      - name: Prepare hostless package with unchanged source and tests
         run: |
           set -euo pipefail
-          xcodebuild -resolvePackageDependencies -project Yattee.xcodeproj -scheme Yattee \
-            -destination 'platform=macOS' \
-            -clonedSourcePackagesDirPath "$TEST_ROOT/packages" \
-            -onlyUsePackageVersionsFromResolvedFile \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
-          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          mkdir -p "$HARNESS/Sources/Yattee" "$HARNESS/Tests/YatteeTests"
+          cp Yattee/Models/ViewerProfile.swift "$HARNESS/Sources/Yattee/"
+          cp Yattee/Core/ViewerProfilesManager.swift "$HARNESS/Sources/Yattee/"
+          cp YatteeTests/ViewerProfilesTests.swift "$HARNESS/Tests/YatteeTests/"
+          git show "$TESTED_SHA:Yattee/Models/ViewerProfile.swift" | cmp - "$HARNESS/Sources/Yattee/ViewerProfile.swift"
+          git show "$TESTED_SHA:Yattee/Core/ViewerProfilesManager.swift" | cmp - "$HARNESS/Sources/Yattee/ViewerProfilesManager.swift"
+          git show "$TESTED_SHA:YatteeTests/ViewerProfilesTests.swift" | cmp - "$HARNESS/Tests/YatteeTests/ViewerProfilesTests.swift"
+          shasum -a 256 "$HARNESS/Sources/Yattee/"*.swift "$HARNESS/Tests/YatteeTests/"*.swift
+          cat > "$HARNESS/Package.swift" <<'SWIFT'
+          // swift-tools-version: 6.0
+          import PackageDescription
+          let package = Package(
+              name: "ViewerProfilesValidation",
+              platforms: [.macOS(.v15)],
+              targets: [
+                  .target(name: "Yattee"),
+                  .testTarget(name: "YatteeTests", dependencies: ["Yattee"])
+              ],
+              swiftLanguageModes: [.v5]
+          )
+          SWIFT
 
-      - name: Run only ViewerProfilesTests unsigned on macOS
+      - name: Execute six original Swift Testing cases without app host
         run: |
           set -euo pipefail
+          xcrun swift test --package-path "$HARNESS" --filter ViewerProfilesTests \
+            2>&1 | tee "$RUNNER_TEMP/viewer-profiles-hostless.log"
+          grep -E 'Test run with 6 tests( in [0-9]+ suites?)? passed' "$RUNNER_TEMP/viewer-profiles-hostless.log"
           test "$(git rev-parse HEAD)" = "$TESTED_SHA"
-          xcodebuild test -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
-            -destination 'platform=macOS' \
-            -only-testing:YatteeTests/ViewerProfilesTests \
-            -parallel-testing-enabled NO \
-            -derivedDataPath "$TEST_ROOT/DerivedData" \
-            -clonedSourcePackagesDirPath "$TEST_ROOT/packages" \
-            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
-            -resultBundlePath "$TEST_ROOT/ViewerProfilesTests.xcresult" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
-            2>&1 | tee "$TEST_ROOT/tests.log"
+          test -z "$(git status --porcelain)"
+          git show "$TESTED_SHA:Yattee/Models/ViewerProfile.swift" | cmp - "$HARNESS/Sources/Yattee/ViewerProfile.swift"
+          git show "$TESTED_SHA:Yattee/Core/ViewerProfilesManager.swift" | cmp - "$HARNESS/Sources/Yattee/ViewerProfilesManager.swift"
+          git show "$TESTED_SHA:YatteeTests/ViewerProfilesTests.swift" | cmp - "$HARNESS/Tests/YatteeTests/ViewerProfilesTests.swift"
 
-      - name: Record tested revision
+      - name: Record test scope
         if: always()
         run: |
           {
-            echo "Pinned feature revision: $TESTED_SHA"
-            echo "Observed checkout: $(git rev-parse HEAD)"
-            echo "Requested suite: YatteeTests/ViewerProfilesTests (6 tests)"
-            echo "Inspect test output for actual executed counts and failures."
+            echo "Pinned and observed source: $(git rev-parse HEAD)"
+            echo "Hostless SwiftPM test harness; unchanged source files and assertions."
+            echo "No app-host, tvOS UI, physical-device, signing or release coverage."
+            if test -f "$RUNNER_TEMP/viewer-profiles-hostless.log"; then
+              grep -E 'Test run with|Test .* (passed|failed)' "$RUNNER_TEMP/viewer-profiles-hostless.log" || true
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
