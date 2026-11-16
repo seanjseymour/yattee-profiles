@@ -1,0 +1,105 @@
+name: Horizon Slate runtime-only validation
+'on':
+  push:
+    branches: [validation/horizon-slate-runtime-cc2b4ad6]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: horizon-slate-runtime-only
+  cancel-in-progress: false
+jobs:
+  runtime:
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+      CI_OUTPUT: ${{ runner.temp }}/theme-runtime-output
+      APP_ARTIFACT: ${{ runner.temp }}/theme-compiled-apps
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 93e2838b250541e9b5af26d73524dbc79877a5b0
+          path: fixture
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source parity and record toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p "$CI_OUTPUT"
+          test "$(uname -m)" = arm64
+          test -d "$DEVELOPER_DIR"
+          { sw_vers; xcodebuild -version; uname -m; git rev-parse HEAD; } | tee "$CI_OUTPUT/toolchain.log"
+          test "$(git -C fixture rev-parse HEAD)" = 93e2838b250541e9b5af26d73524dbc79877a5b0
+          git -C fixture diff --exit-code 7563cac5276b8926a98e4fc665a1bdb54fd89135 HEAD -- YatteeTests YatteeTopShelf Yattee.xcodeproj
+          (cd fixture && python3 scripts/theme-validation/parity.py) > "$CI_OUTPUT/source-parity.log"
+      - name: Verify successful pinned compile run before downloading
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/theme-validation/verify-runtime-input.py run
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: theme-unsigned-apps-43827981405-1
+          run-id: 43827981405
+          repository: seanjseymour/yattee-profiles
+          github-token: ${{ github.token }}
+          path: ${{ env.APP_ARTIFACT }}
+      - name: Verify manifest and archive checksums before installation
+        run: python3 scripts/theme-validation/verify-runtime-input.py files
+      - name: Boot explicit tvOS 26.5 third-generation 1080p and prove 60-second stability
+        id: boot
+        run: |
+          set -euo pipefail
+          python3 scripts/theme-validation/boot.py 2>&1 | tee "$CI_OUTPUT/boot-gate.log"
+      - name: Install reusable synthetic app without rebuilding
+        id: install
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/theme-runtime-product"
+          tar -xzf "$APP_ARTIFACT/synthetic-fixture-app.tar.gz" -C "$RUNNER_TEMP/theme-runtime-product"
+          APP="$RUNNER_TEMP/theme-runtime-product/Yattee.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = com.seanjseymour.yatteeprofiles
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$APP/Info.plist")" = AppleTVSimulator
+          file "$APP/Yattee" | tee "$CI_OUTPUT/app-binary.log"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist")" = 18.0
+          xcrun vtool -show-build "$APP/Yattee" | tee "$CI_OUTPUT/app-minimum-os.log"
+          otool -L "$APP/Yattee" | tee "$CI_OUTPUT/app-dependencies.log"
+          xcrun simctl install "$TVOS_SIM_UDID" "$APP" 2>&1 | tee "$CI_OUTPUT/install.log"
+      - name: Capture all looks and assert persistence and live System inheritance
+        id: capture
+        working-directory: fixture
+        run: |
+          set -euo pipefail
+          python3 scripts/theme-validation/capture.py 2>&1 | tee "$CI_OUTPUT/capture.log"
+      - name: Execute standalone remote UI tests (only disposable XCTest project compiles)
+        id: remote
+        if: ${{ success() && steps.capture.outcome == 'success' }}
+        working-directory: fixture
+        run: bash scripts/theme-validation/remote-tests.sh
+      - name: Collect diagnostics
+        if: always()
+        run: python3 scripts/theme-validation/diagnostics.py
+      - name: Record actual coverage and explicitly unrun unit tests
+        if: always()
+        run: |
+          mkdir -p "$CI_OUTPUT"
+          {
+            echo '## Runtime-only validation from verified reusable app'
+            echo 'Compile input: run 43827981405, head 25d6e5197108f93e89784227243bd0d08c3f1e6a, source tree 53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47.'
+            echo 'Alternate boot gate: ${{ steps.boot.outcome }}'
+            echo 'Install: ${{ steps.install.outcome }}'
+            echo 'Rendered looks, live System and persisted launch: ${{ steps.capture.outcome }}'
+            echo 'Remote UI and preference persistence tests: ${{ steps.remote.outcome }}'
+            echo 'Swift preference unit tests: NOT RUN. App-only products cannot run the Swift unit suite.'
+            echo 'No app rebuild, package dependency resolution, signing, release, or TestFlight. Screenshots still require human visual review.'
+          } | tee "$CI_OUTPUT/coverage.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: theme-runtime-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CI_OUTPUT }}
+          retention-days: 7
+          if-no-files-found: warn
