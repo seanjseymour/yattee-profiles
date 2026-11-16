@@ -19,6 +19,11 @@ enum CloudKitAvailability {
     /// an embedded profile (App Store, TestFlight, simulator) always carry the
     /// correct entitlements and are treated as available.
     static let isAvailable: Bool = {
+        #if DEBUG && os(tvOS) && targetEnvironment(simulator)
+        // The isolated remote-navigation fixture has no CloudKit data and runs
+        // unsigned. Avoid CKContainer's entitlement trap before its UI starts.
+        if ViewerFocusUITestFixture.itemCount != nil { return false }
+        #endif
         guard let entitlements = embeddedProvisioningEntitlements() else {
             return true
         }

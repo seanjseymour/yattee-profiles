@@ -63,6 +63,9 @@ struct TVContinueWatchingShelf: View {
                         loadMoreVideos: loadMoreVideos
                     )
                     .modifier(TVDesignCardFocus())
+                    #if DEBUG && targetEnvironment(simulator)
+                    .accessibilityIdentifier("home.video.\(entry.videoID)")
+                    #endif
             }
         }
         .padding(12)

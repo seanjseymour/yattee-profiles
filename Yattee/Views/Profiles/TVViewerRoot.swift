@@ -17,6 +17,9 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            #if DEBUG && targetEnvironment(simulator)
+            .overlay(alignment: .bottomLeading) { ThemeValidationState() }
+            #endif
             // Give every root one dedicated viewer header. Search controls
             // and Settings rows start below it.
             .safeAreaInset(edge: .top, spacing: 0) {

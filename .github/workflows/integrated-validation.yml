@@ -1,0 +1,136 @@
+name: Integrated themes viewer history unsigned validation
+'on':
+  push:
+    branches: [validation/integrated-themes-1270618b]
+permissions:
+  contents: read
+concurrency:
+  group: integrated-themes-viewer-validation
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: source
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: source
+          ref: 795d946fad4f069e4e7f4b7c9deb5200d8cf951a
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Verify exact production and initialize evidence
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^{tree})" = 813d4e815de7e829074d892995e67b2d11832156
+          test "$(uname -m)" = arm64
+          test -d "$DEVELOPER_DIR"
+          mkdir -p "$RUNNER_TEMP/integrated-evidence"
+          {
+            echo "CI_OUTPUT=$RUNNER_TEMP/integrated-evidence"
+            echo "DERIVED_DATA=$RUNNER_TEMP/integrated-derived"
+            echo "PACKAGE_CACHE=$RUNNER_TEMP/integrated-packages"
+          } >> "$GITHUB_ENV"
+          { sw_vers; xcodebuild -version; uname -m; git rev-parse HEAD HEAD^{tree}; } | tee "$RUNNER_TEMP/integrated-evidence/toolchain.log"
+      - name: Warm simulator tools and prove boot before compile
+        id: boot
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          set -o pipefail
+          python3 ../harness/scripts/theme-validation/boot.py 2>&1 | tee "$CI_OUTPUT/boot-gate.log"
+      - name: Resolve pinned packages
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project Yattee.xcodeproj -scheme Yattee \
+            -destination 'generic/platform=tvOS Simulator' -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+            -onlyUsePackageVersionsFromResolvedFile 2>&1 | tee "$CI_OUTPUT/packages.log"
+          git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Compile exact integrated production and Top Shelf unsigned
+        id: clean
+        run: |
+          set -euo pipefail
+          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/clean-build.xcresult" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/clean-build.log"
+          tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/clean-integrated-app.tar.gz" Yattee.app
+      - name: Verify and overlay only audited fixture deltas
+        if: steps.boot.outcome == 'success'
+        run: python3 ../harness/scripts/theme-validation/integrated-overlay.py
+      - name: Incrementally compile fixture
+        id: fixture
+        if: steps.boot.outcome == 'success'
+        run: |
+          set -euo pipefail
+          xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/fixture-build.xcresult" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            2>&1 | tee "$CI_OUTPUT/fixture-build.log"
+          tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/integrated-fixture-app.tar.gz" Yattee.app
+      - name: Verify simulator remains booted and install
+        id: install
+        if: steps.fixture.outcome == 'success'
+        run: |
+          set -euo pipefail
+          xcrun simctl io "$TVOS_SIM_UDID" screenshot "$CI_OUTPUT/pre-install.png"
+          xcrun simctl install "$TVOS_SIM_UDID" "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app"
+      - name: Capture all four looks independently and assert live appearance
+        id: capture
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: harness
+        run: python3 scripts/theme-validation/capture.py
+      - name: Test actual themed remote paths
+        id: remote
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: harness
+        run: bash scripts/theme-validation/remote-tests.sh
+      - name: Test original viewer history and navigation assertions
+        id: history
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: harness
+        run: bash scripts/theme-validation/history-tests.sh
+      - name: Test viewer storage and appearance unit suites
+        id: units
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash ../harness/scripts/theme-validation/unit-tests.sh
+      - name: Collect diagnostic evidence
+        if: always()
+        run: python3 ../harness/scripts/theme-validation/diagnostics.py
+      - name: Record independent outcomes
+        if: always()
+        run: |
+          {
+            echo 'Integrated production tree813d4e815de7e829074d892995e67b2d11832156 (local1270618b).'
+            echo 'Boot ${{ steps.boot.outcome }}; exact clean compile ${{ steps.clean.outcome }}; fixture ${{ steps.fixture.outcome }}; install ${{ steps.install.outcome }}.'
+            echo 'Captures ${{ steps.capture.outcome }}; remote ${{ steps.remote.outcome }}; original history/navigation ${{ steps.history.outcome }}; unit tests ${{ steps.units.outcome }}.'
+            echo 'Unsigned isolated evidence only. Screenshots require independent actual-render review. No release.'
+          } | tee "$CI_OUTPUT/outcomes.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Require complete validation coverage
+        if: always()
+        run: |
+          test '${{ steps.boot.outcome }}' = success
+          test '${{ steps.clean.outcome }}' = success
+          test '${{ steps.install.outcome }}' = success
+          test '${{ steps.capture.outcome }}' = success
+          test '${{ steps.remote.outcome }}' = success
+          test '${{ steps.history.outcome }}' = success
+          test '${{ steps.units.outcome }}' = success
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: integrated-native-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/integrated-evidence
+          retention-days: 7
