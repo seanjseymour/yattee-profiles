@@ -20,7 +20,7 @@ private struct TVViewerRoot: ViewModifier {
             // and Settings rows start below it.
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
-                    .frame(height: 100)
+                    .frame(height: 120)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -34,7 +34,8 @@ private struct TVViewerRoot: ViewModifier {
                             showingPicker = true
                         } label: {
                             Label(String(localized: "viewers.current \(viewers.activeViewer.name)"), systemImage: "person.crop.circle")
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
                         }
                         .focused($launcherFocused)
                         .accessibilityIdentifier("viewerPicker.open")
@@ -47,9 +48,10 @@ private struct TVViewerRoot: ViewModifier {
                         .frame(width: 300)
                         Spacer(minLength: 0)
                     }
-                    // Only the narrow gutter is reserved beside content. The
-                    // header button extends left into the empty header above.
-                    .frame(width: 60, alignment: .trailing)
+                    // Keep the entire button within its native focus region.
+                    // Overlapping the content region makes Left skip to the
+                    // sidebar. This retains the accepted build's column width.
+                    .frame(width: 300, alignment: .trailing)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
                     .padding(.vertical, 12)
