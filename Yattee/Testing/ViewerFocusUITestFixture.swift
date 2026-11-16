@@ -7,6 +7,7 @@
 
 #if DEBUG && os(tvOS) && targetEnvironment(simulator)
 import Foundation
+import SwiftData
 
 @MainActor
 enum ViewerFocusUITestFixture {
