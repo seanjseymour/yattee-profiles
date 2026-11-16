@@ -876,7 +876,7 @@ final class CloudKitSyncEngine: @unchecked Sendable {
         LoggingService.shared.logCloudKit("Starting initial bulk upload of local watch history...")
         
         // Get all local watch history (limit to reasonable amount)
-        let watchHistory = dataManager.watchHistory(limit: 5000)
+        let watchHistory = dataManager.legacyWatchHistory(limit: 5000)
             .filter { shouldSyncWatchEntry($0) }
 
         guard !watchHistory.isEmpty else {

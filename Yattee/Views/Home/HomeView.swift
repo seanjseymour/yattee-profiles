@@ -1478,7 +1478,7 @@ struct HomeView: View {
                         WatchEntryRowView(
                             entry: entry,
                             onRemove: {
-                                dataManager?.removeFromHistory(videoID: entry.videoID)
+                                dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
                                 loadData()
                             },
                             queueSource: continueWatchingQueueSource,
@@ -1497,7 +1497,7 @@ struct HomeView: View {
                                 tint: .white,
                                 background: .red
                             ) { reset in
-                                dataManager?.removeFromHistory(videoID: entry.videoID)
+                                dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
                                 loadData()
                                 reset()
                             }
@@ -1638,7 +1638,7 @@ struct HomeView: View {
                         WatchEntryRowView(
                             entry: entry,
                             onRemove: {
-                                dataManager?.removeFromHistory(videoID: entry.videoID)
+                                dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
                                 loadData()
                             },
                             queueSource: recentHistoryQueueSource,
@@ -1657,7 +1657,7 @@ struct HomeView: View {
                                 tint: .white,
                                 background: .red
                             ) { reset in
-                                dataManager?.removeFromHistory(videoID: entry.videoID)
+                                dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
                                 loadData()
                                 reset()
                             }
@@ -1676,6 +1676,12 @@ struct HomeView: View {
     /// history screen, which owns the confirmation and the error for it.
     private func serverHistorySection(videos: [Video]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            #if os(tvOS)
+            Text("Server-account history is shared")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            #endif
             sectionHeader(title: "home.recentHistory.title") {
                 appEnvironment?.navigationCoordinator.navigate(to: .history)
             }

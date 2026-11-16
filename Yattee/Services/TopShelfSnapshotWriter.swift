@@ -9,6 +9,9 @@
 
 import Foundation
 import SwiftData
+#if os(tvOS)
+import TVServices
+#endif
 
 @MainActor
 enum TopShelfSnapshotWriter {
@@ -58,6 +61,7 @@ enum TopShelfSnapshotWriter {
             .prefix(TopShelfSnapshot.maxItems)
             .compactMap(Self.makeItem(from:))
         TopShelfSnapshot.write(Array(items), section: .continueWatching)
+        TVTopShelfContentProvider.topShelfContentDidChange()
         #endif
     }
 

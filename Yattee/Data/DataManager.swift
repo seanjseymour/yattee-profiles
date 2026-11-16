@@ -38,6 +38,10 @@ final class DataManager {
 
     /// Weak reference to settings manager for accessing search history limit.
     weak var settingsManager: SettingsManager?
+    // Configured only by the tvOS app. Legacy SwiftData/CloudKit rows remain
+    // separate and untouched; other platforms keep their existing behavior.
+    var viewerWatchStore: ViewerWatchStore?
+    var historyViewerID: (() -> UUID?)?
     
     /// Weak reference to CloudKit sync engine.
     weak var cloudKitSync: CloudKitSyncEngine?

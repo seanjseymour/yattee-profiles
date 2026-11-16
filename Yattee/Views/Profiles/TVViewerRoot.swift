@@ -56,6 +56,25 @@ private struct TVViewerRoot: ViewModifier {
             .onChange(of: launcherFocused) { _, focused in
                 LoggingService.shared.debug("Viewer launcher focused: \(focused)", category: .general)
             }
+            .safeAreaInset(edge: .bottom) {
+                if let history = appEnvironment?.dataManager.viewerWatchStore {
+                    if let failure = history.failure {
+                        Text(failure.localizedDescription)
+                            .font(.callout)
+                            .padding()
+                    } else if history.recoveredFromCacheLoss {
+                        Text(history.recoveryIsLimited
+                             ? "Recent viewer progress was recovered. Older device-local history is no longer available."
+                             : "Viewer progress was recovered after local cache loss.")
+                            .font(.callout)
+                            .padding()
+                    } else if history.recoveryIsLimited {
+                        Text("Only recent viewer progress is protected against local cache loss.")
+                            .font(.callout)
+                            .padding()
+                    }
+                }
+            }
     }
 }
 #endif

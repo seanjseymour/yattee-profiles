@@ -54,15 +54,17 @@ struct DownloadRowView: View {
         hasLoadedWatchData = true
 
         guard let dataManager = appEnvironment?.dataManager else { return }
+        cachedWatchProgress = nil
+        cachedWatchedSeconds = nil
 
         // Load watch progress
-        if let entry = dataManager.watchEntry(for: video.id.videoID) {
+        if let entry = dataManager.watchEntry(for: video.id) {
             let progress = entry.progress
             cachedWatchProgress = progress > 0 && progress < 1 ? progress : nil
         }
 
         // Load watched seconds
-        cachedWatchedSeconds = dataManager.watchProgress(for: video.id.videoID)
+        cachedWatchedSeconds = dataManager.watchProgress(for: video.id)
     }
 
     /// Metadata text for completed downloads (file size + download date)
@@ -116,6 +118,10 @@ struct DownloadRowView: View {
                 context: .downloads
             )
             .onAppear {
+                loadWatchDataIfNeeded()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .watchHistoryDidChange)) { _ in
+                hasLoadedWatchData = false
                 loadWatchDataIfNeeded()
             }
         }

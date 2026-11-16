@@ -348,7 +348,7 @@ final class SearchViewModel {
         
         let watchMap = dataManager.watchEntriesMap()
         return videos.filter { video in
-            guard let entry = watchMap[video.id.videoID] else { return true }
+            guard let entry = watchMap[video.id.watchHistoryKey] else { return true }
             return !entry.isFinished
         }
     }
@@ -362,7 +362,7 @@ final class SearchViewModel {
     private func isVideoWatched(_ video: Video) -> Bool {
         guard let dataManager else { return false }
         let watchMap = dataManager.watchEntriesMap()
-        guard let entry = watchMap[video.id.videoID] else { return false }
+        guard let entry = watchMap[video.id.watchHistoryKey] else { return false }
         return entry.isFinished
     }
 }
