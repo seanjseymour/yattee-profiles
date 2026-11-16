@@ -270,6 +270,7 @@ struct SearchView: View {
                 } label: {
                     Label(String(localized: "viewOptions.title"), systemImage: "slider.horizontal.3")
                 }
+                .buttonStyle(TVDesignButtonStyle())
             }
             .focusSection()
             .padding(.horizontal, 48)
