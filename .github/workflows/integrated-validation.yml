@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: source
-          ref: 795d946fad4f069e4e7f4b7c9deb5200d8cf951a
+          ref: 5ba9669dd9bdeb2780c6a02d96e8297072bd39b2
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -30,7 +30,7 @@ jobs:
       - name: Verify exact production and initialize evidence
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^{tree})" = 813d4e815de7e829074d892995e67b2d11832156
+          test "$(git rev-parse HEAD^{tree})" = de93b91e88c33def28f3dd87adc3643aa0a9ecb5
           test "$(uname -m)" = arm64
           test -d "$DEVELOPER_DIR"
           mkdir -p "$RUNNER_TEMP/integrated-evidence"
@@ -113,7 +113,7 @@ jobs:
         if: always()
         run: |
           {
-            echo 'Integrated production tree813d4e815de7e829074d892995e67b2d11832156 (local1270618b).'
+            echo 'Integrated production treede93b91e88c33def28f3dd87adc3643aa0a9ecb5 (local33dfdde3).'
             echo 'Boot ${{ steps.boot.outcome }}; exact clean compile ${{ steps.clean.outcome }}; fixture ${{ steps.fixture.outcome }}; install ${{ steps.install.outcome }}.'
             echo 'Captures ${{ steps.capture.outcome }}; remote ${{ steps.remote.outcome }}; original history/navigation ${{ steps.history.outcome }}; unit tests ${{ steps.units.outcome }}.'
             echo 'Unsigned isolated evidence only. Screenshots require independent actual-render review. No release.'
