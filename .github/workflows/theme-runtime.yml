@@ -14,9 +14,11 @@ jobs:
     timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
-      CI_OUTPUT: ${{ runner.temp }}/theme-runtime-output
-      APP_ARTIFACT: ${{ runner.temp }}/theme-compiled-apps
     steps:
+      - name: Initialize artifact paths
+        run: |
+          echo "CI_OUTPUT=$RUNNER_TEMP/theme-runtime-output" >> "$GITHUB_ENV"
+          echo "APP_ARTIFACT=$RUNNER_TEMP/theme-compiled-apps" >> "$GITHUB_ENV"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
