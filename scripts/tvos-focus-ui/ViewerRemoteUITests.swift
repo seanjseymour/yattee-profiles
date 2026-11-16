@@ -16,11 +16,12 @@ final class ViewerRemoteUITests: XCTestCase {
         app.terminate()
     }
 
-    private func launch(items: Int, settings: Bool = false, search: Bool = false, viewerName: String = "Alpha") {
+    private func launch(items: Int, settings: Bool = false, search: Bool = false, sources: Bool = false, viewerName: String = "Alpha") {
         continueAfterFailure = false
         app.launchEnvironment["YATTEE_FOCUS_UI_ITEMS"] = String(items)
         app.launchEnvironment["YATTEE_FOCUS_UI_SETTINGS"] = settings ? "1" : "0"
         app.launchEnvironment["YATTEE_FOCUS_UI_SEARCH"] = search ? "1" : "0"
+        app.launchEnvironment["YATTEE_FOCUS_UI_SOURCES"] = sources ? "1" : "0"
         app.launchEnvironment["YATTEE_FOCUS_UI_VIEWER_NAME"] = viewerName
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
@@ -118,7 +119,7 @@ final class ViewerRemoteUITests: XCTestCase {
         focused(sources)
     }
 
-    func testSearchControlsShareCenterlineAndReachViewer() {
+    func testSearchHeaderAndOptionsBoundary() {
         checkSearchControls(viewerName: "Alpha")
     }
 
@@ -130,14 +131,14 @@ final class ViewerRemoteUITests: XCTestCase {
         launch(items: 0, search: true, viewerName: viewerName)
         let options = app.buttons["View Options"]
         focusInitialContent(options)
-        XCTAssertEqual(launcher.frame.midY, options.frame.midY, accuracy: 1)
+        XCTAssertLessThan(launcher.frame.maxY + 12, options.frame.minY)
         let unfocused = XCTAttachment(screenshot: app.screenshot())
         unfocused.name = "Search — Viewer unfocused"
         unfocused.lifetime = .keepAlways
         add(unfocused)
         remote.press(.right)
         focused(launcher)
-        XCTAssertEqual(launcher.frame.midY, options.frame.midY, accuracy: 1)
+        XCTAssertLessThan(launcher.frame.maxY + 12, options.frame.minY)
         XCTAssertTrue(launcher.label.contains(viewerName))
         XCTAssertLessThanOrEqual(launcher.frame.maxX, app.frame.maxX)
         let focusedCapture = XCTAttachment(screenshot: app.screenshot())
@@ -150,6 +151,48 @@ final class ViewerRemoteUITests: XCTestCase {
         focused(launcher)
         remote.press(.left)
         focused(options)
+        remote.press(.select)
+        capture("Search — View Options presented")
+        remote.press(.menu)
+        focused(options)
+    }
+
+    private func capture(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    func testSettingsRootHeaderSeparation() {
+        launch(items: 0, settings: true)
+        let sourceRow = app.cells["Sources"]
+        focusInitialContent(sourceRow)
+        capture("Settings — Sources focused")
+        XCTAssertLessThan(launcher.frame.maxY + 12, sourceRow.frame.minY)
+        remote.press(.right)
+        focused(launcher)
+        capture("Settings — Viewer focused")
+        XCTAssertLessThan(launcher.frame.maxY + 12, sourceRow.frame.minY)
+        remote.press(.left)
+        focused(sourceRow)
+    }
+
+    func testSourcesRootHeader() {
+        launch(items: 0, sources: true)
+        capture("Sources — root")
+    }
+
+    func testFiveTilesKeepNativeTraversalBeforeViewer() {
+        launch(items: 5)
+        focusInitialContent(app.buttons["home.video.focus-fixture-0"])
+        for index in 1..<5 {
+            remote.press(.right)
+            focused(app.buttons["home.video.focus-fixture-\(index)"])
+        }
+        remote.press(.right)
+        focused(launcher)
+        capture("Home — five tiles, Viewer focused")
     }
 
     func testSettingsDetailBackAndLauncherBackStayInApp() {

@@ -10,18 +10,22 @@ import SwiftUI
 #if os(tvOS)
 private struct TVViewerRoot: ViewModifier {
     let router: NavigationRouter
-    let topPadding: CGFloat
     @Environment(\.appEnvironment) private var appEnvironment
     @State private var showingPicker = false
     @FocusState private var launcherFocused: Bool
 
     func body(content: Content) -> some View {
         content
-            // Native directional focus visits content tiles before this
-            // adjacent, full-height trailing region. Both regions participate
-            // so Left from the launcher can return to content below its height.
             .focusSection()
-            .safeAreaInset(edge: .trailing, spacing: 0) {
+            // Give every root one dedicated viewer header. The content keeps
+            // its full width; Search controls and Settings rows start below it.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear
+                    .frame(height: 100)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .overlay(alignment: .topTrailing) {
                 if let viewers = appEnvironment?.viewerProfilesManager {
                     VStack {
                         Button {
@@ -43,8 +47,10 @@ private struct TVViewerRoot: ViewModifier {
                     .frame(width: 300)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
-                    .padding(.top, topPadding)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 12)
+                    // The transparent remainder is a native focus region,
+                    // not a content column or a gesture interceptor. It lets
+                    // Right from a shelf reach the header after its last tile.
                     .focusSection()
                 }
             }
@@ -64,9 +70,9 @@ private struct TVViewerRoot: ViewModifier {
 
 extension View {
     @ViewBuilder
-    func tvViewerRoot(router: NavigationRouter, topPadding: CGFloat = 12) -> some View {
+    func tvViewerRoot(router: NavigationRouter) -> some View {
         #if os(tvOS)
-        modifier(TVViewerRoot(router: router, topPadding: topPadding))
+        modifier(TVViewerRoot(router: router))
         #else
         self
         #endif

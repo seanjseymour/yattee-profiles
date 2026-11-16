@@ -436,7 +436,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.search, role: .search) {
                 NavigationStack(path: router.path(for: .search)) {
                     SearchView()
-                        .tvViewerRoot(router: router, topPadding: SearchView.controlsTopPadding)
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {

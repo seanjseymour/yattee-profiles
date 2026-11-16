@@ -13,7 +13,7 @@ import SwiftData
 enum ViewerFocusUITestFixture {
     nonisolated static var itemCount: Int? {
         guard let value = ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_ITEMS"],
-              let count = Int(value), (0...2).contains(count) else { return nil }
+              let count = Int(value), (0...5).contains(count) else { return nil }
         return count
     }
 
@@ -48,6 +48,8 @@ enum ViewerFocusUITestFixture {
             environment.navigationCoordinator.router.applyStartupTabIfNeeded(.settings)
         } else if ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_SEARCH"] == "1" {
             environment.navigationCoordinator.router.applyStartupTabIfNeeded(.search)
+        } else if ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_SOURCES"] == "1" {
+            environment.navigationCoordinator.router.applyStartupTabIfNeeded(.sources)
         }
     }
 }
