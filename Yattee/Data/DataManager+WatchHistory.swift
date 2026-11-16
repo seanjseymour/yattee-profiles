@@ -17,8 +17,8 @@ extension DataManager {
     /// - Parameter isLive: Set by the player when the active stream is live but the
     ///   `Video` metadata does not say so (some sources hardcode `isLive: false`).
     ///   Live views are still recorded in history, but without a resume position.
-    func updateWatchProgressLocal(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil) {
-        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID) { return }
+    func updateWatchProgressLocal(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil, writePermit: ViewerWatchStore.WritePermit? = nil) {
+        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID, writePermit: writePermit) { return }
         let videoID = video.id.videoID
         let isLiveContent = video.isLive || isLive
         let descriptor = FetchDescriptor<WatchEntry>(
@@ -60,8 +60,8 @@ extension DataManager {
 
     /// Records or updates watch progress for a video and queues for iCloud sync.
     /// Use this when video closes or switches to sync the final progress.
-    func updateWatchProgress(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil) {
-        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID) { return }
+    func updateWatchProgress(for video: Video, seconds: TimeInterval, duration: TimeInterval? = nil, isLive: Bool = false, viewerID: UUID? = nil, writePermit: ViewerWatchStore.WritePermit? = nil) {
+        if saveViewerProgress(for: video, seconds: seconds, duration: duration, isLive: isLive, viewerID: viewerID, writePermit: writePermit) { return }
         // Find existing entry or create new one
         let videoID = video.id.videoID
         let isLiveContent = video.isLive || isLive
@@ -230,7 +230,7 @@ extension DataManager {
 
     /// Clears all watch history.
     func clearWatchHistory() {
-        if removeViewerHistory(matching: { _ in true }) { return }
+        if removeViewerHistory(invalidateAll: true, matching: { _ in true }) { return }
         let descriptor = FetchDescriptor<WatchEntry>()
 
         do {
