@@ -32,7 +32,7 @@ struct ViewerWatchStoreTests {
         let (url, defaults, suite) = fixture()
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let a = UUID(), b = UUID()
-        let store = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         try store.save(record(a, seconds: 111))
         try store.save(record(b, seconds: 222))
         // A -> B -> A reads, independent of current selection or display name.
@@ -45,7 +45,7 @@ struct ViewerWatchStoreTests {
         try store.remove(viewerID: b) { _ in true }
         #expect(store.history(viewerID: b).isEmpty)
         #expect(store.history(viewerID: a).count == 2)
-        let relaunched = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let relaunched = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(relaunched.history(viewerID: a).count == 2)
         #expect(relaunched.history(viewerID: b).isEmpty)
     }
@@ -54,7 +54,7 @@ struct ViewerWatchStoreTests {
         let (url, defaults, suite) = fixture()
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let a = UUID(), b = UUID()
-        let store = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         var ownership = ViewerPlaybackOwnership()
         ownership.open(viewerID: a)
         let opening = try #require(ownership.session)
@@ -79,7 +79,7 @@ struct ViewerWatchStoreTests {
         let (url, defaults, suite) = fixture()
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let a = UUID(), b = UUID()
-        let store = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         for index in 0..<25 {
             try store.save(record(a, key: "source/\(index)", seconds: Double(index + 20), date: Date(timeIntervalSince1970: Double(index))))
         }
@@ -89,7 +89,7 @@ struct ViewerWatchStoreTests {
         #expect(store.recoveryIsLimited)
         #expect(try #require(defaults.data(forKey: ViewerWatchStore.recoveryKey)).count <= ViewerWatchStore.recoveryByteLimit)
         try FileManager.default.removeItem(at: url)
-        let recovered = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let recovered = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(recovered.recoveredFromCacheLoss)
         #expect(recovered.recoveryIsLimited)
         #expect(recovered.history(viewerID: a).count == ViewerWatchStore.recoveryEntriesPerViewer)
@@ -105,14 +105,14 @@ struct ViewerWatchStoreTests {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try legacy.write(to: legacyURL)
         defaults.set(legacy, forKey: "unrelated-existing-data")
-        let store = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(store.records.isEmpty)
         try store.save(record(UUID(), seconds: 60))
         #expect(try Data(contentsOf: legacyURL) == legacy)
         #expect(defaults.data(forKey: "unrelated-existing-data") == legacy)
         let future = Data(#"{"version":99,"records":[]}"#.utf8)
         try future.write(to: url)
-        let unavailable = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let unavailable = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         #expect(unavailable.failure == .unreadable)
         #expect(throws: ViewerWatchStoreError.unreadable) { try unavailable.save(record(UUID(), seconds: 1)) }
         #expect(try Data(contentsOf: url) == future)
@@ -122,7 +122,7 @@ struct ViewerWatchStoreTests {
         let (url, defaults, suite) = fixture()
         defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let a = UUID()
-        let store = ViewerWatchStore(fileURL: url, defaults: defaults)
+        let store = ViewerWatchStore(fileURL: url, defaults: defaults, defaultsDomainName: suite)
         try store.save(record(a, seconds: 60))
         let before = try Data(contentsOf: url)
         let backup = defaults.data(forKey: ViewerWatchStore.recoveryKey)

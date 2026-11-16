@@ -56,11 +56,13 @@ final class ViewerWatchStore {
     private(set) var failure: ViewerWatchStoreError?
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let defaultsDomainName: String?
     @ObservationIgnored private var writable = true
 
-    init(fileURL: URL, defaults: UserDefaults = .standard) {
+    init(fileURL: URL, defaults: UserDefaults = .standard, defaultsDomainName: String? = Bundle.main.bundleIdentifier) {
         self.fileURL = fileURL
         self.defaults = defaults
+        self.defaultsDomainName = defaultsDomainName
         let bytes: Data?
         if FileManager.default.fileExists(atPath: fileURL.path) {
             bytes = try? Data(contentsOf: fileURL)
@@ -130,7 +132,10 @@ final class ViewerWatchStore {
                 if backup.count <= Self.recoveryByteLimit { break }
                 recovery.removeLast()
             }
-            var domain = defaults.dictionaryRepresentation()
+            // Budget the app's persistent domain, not global/registration
+            // defaults that belong to the OS and aren't stored by this app.
+            var domain = defaultsDomainName.flatMap { defaults.persistentDomain(forName: $0) }
+                ?? defaults.dictionaryRepresentation()
             domain[Self.recoveryKey] = backup
             let projected = try PropertyListSerialization.data(fromPropertyList: domain, format: .binary, options: 0)
             // Leave headroom below tvOS's 512 KB warning / 1 MB termination.
