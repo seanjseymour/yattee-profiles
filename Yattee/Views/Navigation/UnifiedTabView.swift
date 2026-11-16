@@ -352,9 +352,6 @@ struct UnifiedTabView: View {
 struct UnifiedTabView: View {
     @Environment(\.appEnvironment) private var appEnvironment
 
-    @State private var showingViewerPicker = false
-    @FocusState private var viewerButtonFocused: Bool
-
     let router: NavigationRouter
 
     // Zoom transition namespace (local to this tab view)
@@ -379,30 +376,6 @@ struct UnifiedTabView: View {
             sidebarSections
         }
         .tabViewStyle(.sidebarAdaptable)
-        .safeAreaInset(edge: .top) {
-            if let viewers = appEnvironment?.viewerProfilesManager {
-                HStack {
-                    Spacer()
-                    Button {
-                        showingViewerPicker = true
-                    } label: {
-                        Label(String(localized: "viewers.current \(viewers.activeViewer.name)"), systemImage: "person.crop.circle")
-                            .lineLimit(1)
-                    }
-                    .focused($viewerButtonFocused)
-                    .accessibilityIdentifier("viewerPicker.open")
-                }
-                .padding(.horizontal, 60)
-                .padding(.vertical, 12)
-            }
-        }
-        .fullScreenCover(isPresented: $showingViewerPicker, onDismiss: {
-            viewerButtonFocused = true
-        }) {
-            if let viewers = appEnvironment?.viewerProfilesManager {
-                ViewerPickerView(manager: viewers)
-            }
-        }
         .zoomTransitionNamespace(zoomTransition)
         .onAppear {
             configureSidebarManager()
@@ -463,6 +436,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.search, role: .search) {
                 NavigationStack(path: router.path(for: .search)) {
                     SearchView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -473,6 +447,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.home) {
                 NavigationStack(path: router.path(for: .home)) {
                     HomeView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -483,6 +458,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.subscriptionsFeed) {
                 NavigationStack(path: router.path(for: .subscriptionsFeed)) {
                     SubscriptionsView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -493,6 +469,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.bookmarks) {
                 NavigationStack(path: router.path(for: .bookmarks)) {
                     BookmarksListView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -503,6 +480,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.history) {
                 NavigationStack(path: router.path(for: .history)) {
                     HistoryListView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -520,6 +498,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.manageChannels) {
                 NavigationStack(path: router.path(for: .manageChannels)) {
                     ManageChannelsView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -530,6 +509,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.playlistsList) {
                 NavigationStack(path: router.path(for: .playlistsList)) {
                     PlaylistsListView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -540,6 +520,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.sources) {
                 NavigationStack(path: router.path(for: .sources)) {
                     MediaSourcesView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -550,6 +531,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.settings) {
                 NavigationStack(path: router.path(for: .settings)) {
                     SettingsView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -565,6 +547,7 @@ struct UnifiedTabView: View {
                     ) {
                         OpenLinkView()
                     }
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
                 }
             } label: {
@@ -580,6 +563,7 @@ struct UnifiedTabView: View {
                     ) {
                         RemoteControlContentView(navigationStyle: .link)
                     }
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
                 }
             } label: {
@@ -590,6 +574,7 @@ struct UnifiedTabView: View {
             Tab(value: SidebarItem.continueWatching) {
                 NavigationStack(path: router.path(for: .continueWatching)) {
                     ContinueWatchingView()
+                        .tvViewerRoot(router: router)
                         .withNavigationDestinations()
                 }
             } label: {
@@ -702,6 +687,7 @@ extension UnifiedTabView {
         if case .channel(let channelID, _, let source) = item {
             NavigationStack(path: router.path(for: item)) {
                 ChannelView(channelID: channelID, source: source)
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
             }
             .id(item.id)
@@ -731,6 +717,7 @@ extension UnifiedTabView {
         case .playlist(let id, _):
             NavigationStack(path: router.path(for: item)) {
                 UnifiedPlaylistDetailView(source: .local(id))
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
             }
             .id(item.id)
@@ -739,6 +726,7 @@ extension UnifiedTabView {
                 // No instance passed: the detail view resolves it from the
                 // account, same as SidebarItem.navigationDestination().
                 UnifiedPlaylistDetailView(source: .remote(id, instance: nil, title: title, accountID: accountID))
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
             }
             .id(item.id)
@@ -766,6 +754,7 @@ extension UnifiedTabView {
            let source = appEnvironment?.mediaSourcesManager.source(byID: id) {
             NavigationStack(path: router.path(for: item)) {
                 MediaBrowserView(source: source, path: "/")
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
             }
             .id(item.id)
@@ -780,6 +769,7 @@ extension UnifiedTabView {
            let instance = appEnvironment?.instancesManager.enabledInstances.first(where: { $0.id == id }) {
             NavigationStack(path: router.path(for: item)) {
                 InstanceBrowseView(instance: instance)
+                    .tvViewerRoot(router: router)
                     .withNavigationDestinations()
             }
             .id(item.id)
