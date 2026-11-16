@@ -16,11 +16,16 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Native directional focus visits content tiles before this
-            // adjacent, full-height trailing region. Both regions participate
-            // so Left from the launcher can return to content below its height.
             .focusSection()
-            .safeAreaInset(edge: .trailing, spacing: 0) {
+            // Give every root one dedicated viewer header. The content keeps
+            // its full width; Search controls and Settings rows start below it.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear
+                    .frame(height: 100)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .overlay(alignment: .topTrailing) {
                 if let viewers = appEnvironment?.viewerProfilesManager {
                     VStack {
                         Button {
@@ -43,6 +48,9 @@ private struct TVViewerRoot: ViewModifier {
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
                     .padding(.vertical, 12)
+                    // The transparent remainder is a native focus region,
+                    // not a content column or a gesture interceptor. It lets
+                    // Right from a shelf reach the header after its last tile.
                     .focusSection()
                 }
             }
