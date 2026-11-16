@@ -18,7 +18,6 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scrollContentBackground(.hidden)
             .focusSection()
             #if DEBUG && targetEnvironment(simulator)
             .overlay(alignment: .bottomLeading) { ThemeValidationState() }

@@ -50,10 +50,10 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild build -project Yattee.xcodeproj -scheme Yattee -configuration Debug \
-            -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
+            -destination "platform=tvOS Simulator,id=$TVOS_SIM_UDID" -derivedDataPath "$DERIVED_DATA" \
             -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/theme-build.xcresult" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
             2>&1 | tee "$CI_OUTPUT/build.log"
       - name: Verify boot still alive and install once
         id: install
@@ -86,7 +86,7 @@ jobs:
         run: |
           {
             echo '## Isolated Horizon / Slate candidate'
-            echo 'Source tree: ab0a550213b591dcc69d57650aeca6b307989ded (local 1cf40497; remote 99b6de08).'
+            echo 'Source tree: 53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47 (local cc2b4ad6; remote 7563cac5).'
             echo 'Five fixture-only app deltas are printed in parity.log. No signing or release.'
             echo 'Build: ${{ steps.build.outcome }}; installation: ${{ steps.install.outcome }}'
             echo 'Appearance captures/assertions: ${{ steps.capture.outcome }}'

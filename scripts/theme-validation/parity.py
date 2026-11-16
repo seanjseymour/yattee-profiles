@@ -1,7 +1,7 @@
 from pathlib import Path
 import subprocess,hashlib,json
-candidate='99b6de08b2c994f51bd81eaabc0649a6729c395c'
-tree='ab0a550213b591dcc69d57650aeca6b307989ded'
+candidate='7563cac5276b8926a98e4fc665a1bdb54fd89135'
+tree='53f3e3f7c18f0e62fcf68ac9ee19fdb8a0b6cc47'
 assert subprocess.check_output(['git','rev-parse',candidate+'^{tree}'],text=True).strip()==tree
 allowed={
  'Yattee/Core/AppEnvironment.swift',
@@ -12,7 +12,7 @@ allowed={
 }
 changed=set(subprocess.check_output(['git','diff','--name-only',candidate,'HEAD','--','Yattee','YatteeTests','YatteeTopShelf','Yattee.xcodeproj'],text=True).splitlines())
 assert changed==allowed,(changed,allowed)
-print('Full production source tree matches local candidate 1cf40497:',tree)
+print('Full production source tree matches local candidate cc2b4ad6:',tree)
 print('Remote mirror commit:',candidate)
 print('Harness commit:',subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
 print('Five audited fixture-only deltas:',sorted(allowed))

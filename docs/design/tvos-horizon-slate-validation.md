@@ -22,7 +22,9 @@ System removes the UIKit window override instead of persisting the effective lig
 - Semantic palette numeric contrast checked for all four combinations; secondary text is at least 5.54:1, focus foreground is at least 6.89:1.
 - Added Swift Testing cases for defaults, local-only storage, independent persistence across all theme/mode combinations, cache invalidation, invalid stored values, and UIKit mapping.
 
-**Not run:** Swift compiler, Xcode build, Swift tests, Periphery, tvOS remote tests, actual app screenshots, independent visual review. No Apple runtime or Swift toolchain exists in this Linux workspace. Source review and numeric contrast do not substitute for those checks.
+**Native attempt 1:** run 43825470736 proved stable boot and package resolution, then identified `scrollContentBackground` as unavailable on tvOS. The candidate removes that unsupported modifier and retains native adaptive list backgrounds.
+
+**Not yet passed:** Xcode build, Swift tests, Periphery, tvOS remote tests, actual app screenshots, independent visual review. No Apple runtime or Swift toolchain exists in this Linux workspace. Source review and numeric contrast do not substitute for those checks.
 
 ## Required exact-revision Apple verification
 
