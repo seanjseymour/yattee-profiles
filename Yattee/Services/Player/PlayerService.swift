@@ -1196,6 +1196,12 @@ final class PlayerService {
             // Same-video openings don't reset PlayerState's clock themselves.
             state.currentTime = 0
             viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
+            // Capture before scheduling asynchronous loading: removal during
+            // that load must revoke this opening, not grant it a later permit.
+            if let store = dataManager.viewerWatchStore, let session = viewerPlaybackOwnership.session {
+                viewerWritePermit = store.writePermit(viewerID: session.viewerID, key: video.id.watchHistoryKey)
+                permitSessionID = session.id
+            }
             lastSavedProgress = nil
         }
 
@@ -1255,6 +1261,12 @@ final class PlayerService {
             // Same-video openings don't reset PlayerState's clock themselves.
             state.currentTime = 0
             viewerPlaybackOwnership.open(viewerID: dataManager.activeHistoryViewerID)
+            // Capture before scheduling asynchronous loading: removal during
+            // that load must revoke this opening, not grant it a later permit.
+            if let store = dataManager.viewerWatchStore, let session = viewerPlaybackOwnership.session {
+                viewerWritePermit = store.writePermit(viewerID: session.viewerID, key: video.id.watchHistoryKey)
+                permitSessionID = session.id
+            }
             lastSavedProgress = nil
         }
 
