@@ -437,7 +437,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .search)) {
                     SearchView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.search.title, systemImage: SidebarItem.search.systemImage)
@@ -448,7 +448,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .home)) {
                     HomeView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.home.title, systemImage: SidebarItem.home.systemImage)
@@ -459,7 +459,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .subscriptionsFeed)) {
                     SubscriptionsView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.subscriptionsFeed.title, systemImage: SidebarItem.subscriptionsFeed.systemImage)
@@ -470,7 +470,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .bookmarks)) {
                     BookmarksListView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.bookmarks.title, systemImage: SidebarItem.bookmarks.systemImage)
@@ -481,7 +481,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .history)) {
                     HistoryListView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.history.title, systemImage: SidebarItem.history.systemImage)
@@ -499,7 +499,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .manageChannels)) {
                     ManageChannelsView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.manageChannels.title, systemImage: SidebarItem.manageChannels.systemImage)
@@ -510,7 +510,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .playlistsList)) {
                     PlaylistsListView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.playlistsList.title, systemImage: SidebarItem.playlistsList.systemImage)
@@ -521,7 +521,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .sources)) {
                     MediaSourcesView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.sources.title, systemImage: SidebarItem.sources.systemImage)
@@ -532,7 +532,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .settings)) {
                     SettingsView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.settings.title, systemImage: SidebarItem.settings.systemImage)
@@ -575,7 +575,7 @@ struct UnifiedTabView: View {
                 NavigationStack(path: router.path(for: .continueWatching)) {
                     ContinueWatchingView()
                         .tvViewerRoot(router: router)
-                    .withNavigationDestinations()
+                        .withNavigationDestinations()
                 }
             } label: {
                 Label(SidebarItem.continueWatching.title, systemImage: SidebarItem.continueWatching.systemImage)

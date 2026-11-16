@@ -11,7 +11,7 @@ import SwiftData
 
 @MainActor
 enum ViewerFocusUITestFixture {
-    static var itemCount: Int? {
+    nonisolated static var itemCount: Int? {
         guard let value = ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_ITEMS"],
               let count = Int(value), (0...2).contains(count) else { return nil }
         return count
