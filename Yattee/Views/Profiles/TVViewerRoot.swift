@@ -10,6 +10,7 @@ import SwiftUI
 #if os(tvOS)
 private struct TVViewerRoot: ViewModifier {
     let router: NavigationRouter
+    let topPadding: CGFloat
     @Environment(\.appEnvironment) private var appEnvironment
     @State private var showingPicker = false
     @FocusState private var launcherFocused: Bool
@@ -42,7 +43,8 @@ private struct TVViewerRoot: ViewModifier {
                     .frame(width: 300)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
-                    .padding(.vertical, 12)
+                    .padding(.top, topPadding)
+                    .padding(.bottom, 12)
                     .focusSection()
                 }
             }
@@ -62,9 +64,9 @@ private struct TVViewerRoot: ViewModifier {
 
 extension View {
     @ViewBuilder
-    func tvViewerRoot(router: NavigationRouter) -> some View {
+    func tvViewerRoot(router: NavigationRouter, topPadding: CGFloat = 12) -> some View {
         #if os(tvOS)
-        modifier(TVViewerRoot(router: router))
+        modifier(TVViewerRoot(router: router, topPadding: topPadding))
         #else
         self
         #endif
