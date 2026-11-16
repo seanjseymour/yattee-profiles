@@ -23,6 +23,10 @@ enum ViewerFocusUITestFixture {
         settings.homeSectionLayout = .grid
         settings.homeSectionVisibility = Dictionary(uniqueKeysWithValues:
             HomeSectionItem.defaultOrder.map { ($0, $0 == .continueWatching) })
+        let suite = "ViewerUIFixture.\(UUID())"
+        environment.dataManager.viewerWatchStore = ViewerWatchStore(
+            fileURL: FileManager.default.temporaryDirectory.appendingPathComponent(suite).appendingPathComponent("watch.json"),
+            defaults: UserDefaults(suiteName: suite)!, defaultsDomainName: suite)
         for index in 0..<itemCount {
             let entry = WatchEntry(
                 videoID: "focus-fixture-\(index)", sourceRawValue: "global",
@@ -31,7 +35,12 @@ enum ViewerFocusUITestFixture {
                 watchedSeconds: 120
             )
             entry.updatedAt = Date(timeIntervalSince1970: 2_000_000_000 - Double(index))
-            environment.dataManager.modelContext.insert(entry)
+            let owner = environment.viewerProfilesManager.profiles[0].id
+            environment.dataManager.updateWatchProgressLocal(for: entry.toVideo(), seconds: 120, viewerID: owner)
+            if var record = environment.dataManager.viewerWatchStore?.record(viewerID: owner, key: entry.videoIdentifier.watchHistoryKey) {
+                record.updatedAt = entry.updatedAt
+                try! environment.dataManager.viewerWatchStore?.save(record)
+            }
         }
         environment.dataManager.save()
         let viewers = environment.viewerProfilesManager
@@ -43,6 +52,14 @@ enum ViewerFocusUITestFixture {
             try viewers.select(id: viewers.profiles[0].id)
         } catch {
             preconditionFailure("Invalid isolated UI-test viewer fixture: \(error)")
+        }
+        if ProcessInfo.processInfo.environment["YATTEE_HISTORY_SMOKE"] == "1" {
+            do {
+                try ViewerHistorySmokeChecks.run()
+                let marker = WatchEntry(videoID: "history-integration-pass", sourceRawValue: "global", globalProvider: "youtube",
+                                        title: "History isolation checks passed", authorName: "Fixture", authorID: "fixture", duration: 600)
+                environment.dataManager.updateWatchProgressLocal(for: marker.toVideo(), seconds: 120)
+            } catch { preconditionFailure("History integration fixture failed: \(error)") }
         }
         if ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_SETTINGS"] == "1" {
             environment.navigationCoordinator.router.applyStartupTabIfNeeded(.settings)

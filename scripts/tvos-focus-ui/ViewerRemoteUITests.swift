@@ -16,13 +16,14 @@ final class ViewerRemoteUITests: XCTestCase {
         app.terminate()
     }
 
-    private func launch(items: Int, settings: Bool = false, search: Bool = false, sources: Bool = false, viewerName: String = "Alpha") {
+    private func launch(items: Int, settings: Bool = false, search: Bool = false, sources: Bool = false, viewerName: String = "Alpha", historySmoke: Bool = false) {
         continueAfterFailure = false
         app.launchEnvironment["YATTEE_FOCUS_UI_ITEMS"] = String(items)
         app.launchEnvironment["YATTEE_FOCUS_UI_SETTINGS"] = settings ? "1" : "0"
         app.launchEnvironment["YATTEE_FOCUS_UI_SEARCH"] = search ? "1" : "0"
         app.launchEnvironment["YATTEE_FOCUS_UI_SOURCES"] = sources ? "1" : "0"
         app.launchEnvironment["YATTEE_FOCUS_UI_VIEWER_NAME"] = viewerName
+        app.launchEnvironment["YATTEE_HISTORY_SMOKE"] = historySmoke ? "1" : "0"
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCTAssertTrue(launcher.waitForExistence(timeout: 30), app.debugDescription)
@@ -181,6 +182,12 @@ final class ViewerRemoteUITests: XCTestCase {
     func testSourcesRootHeader() {
         launch(items: 0, sources: true)
         capture("Sources — root")
+    }
+
+    func testViewerHistoryAdaptersAndUpgradePreservation() {
+        launch(items: 0, historySmoke: true)
+        XCTAssertTrue(app.buttons["home.video.history-integration-pass"].waitForExistence(timeout: 10), app.debugDescription)
+        capture("Synthetic history adapter checks passed")
     }
 
     func testFiveTilesKeepNativeTraversalBeforeViewer() {
