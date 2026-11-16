@@ -135,6 +135,7 @@ final class PlayerService {
     private var lastSavedProgress: (videoID: String, seconds: TimeInterval)?
     private var viewerPlaybackOwnership = ViewerPlaybackOwnership()
     private var backendViewerID: UUID?
+    private var backendPlaybackSessionID: UUID?
     private var viewerWritePermit: ViewerWatchStore.WritePermit?
     private var permitSessionID: UUID?
 
@@ -2541,24 +2542,26 @@ final class PlayerService {
     private func acceptsViewerCallback(from backend: any PlayerBackend) -> Bool {
         dataManager.viewerWatchStore == nil ||
             (currentBackend === backend && backendViewerID == viewerPlaybackOwnership.session?.viewerID &&
+             backendPlaybackSessionID == viewerPlaybackOwnership.session?.id &&
              viewerPlaybackOwnership.session != nil)
     }
 
     private func ensureBackend(type: PlayerBackendType) async throws -> any PlayerBackend {
         // Reuse existing backend if same type
         if let current = currentBackend, current.backendType == type,
-           dataManager.viewerWatchStore == nil || backendViewerID == viewerPlaybackOwnership.session?.viewerID {
+           dataManager.viewerWatchStore == nil || backendPlaybackSessionID == viewerPlaybackOwnership.session?.id {
             return current
         }
 
-        // Crossing a viewer boundary gets a new backend. Delayed callbacks
-        // from the retired backend cannot write into the new viewer's session.
+        // Each explicit opening gets a new backend. Delayed callbacks from
+        // a removed or retired opening cannot write through its replacement.
         if dataManager.viewerWatchStore != nil {
             currentBackend?.delegate = nil
             currentBackend?.stop()
         }
         let backend = try backendFactory.createBackend(type: type)
         backendViewerID = viewerPlaybackOwnership.session?.viewerID
+        backendPlaybackSessionID = viewerPlaybackOwnership.session?.id
         backend.delegate = self
         currentBackend = backend
 
