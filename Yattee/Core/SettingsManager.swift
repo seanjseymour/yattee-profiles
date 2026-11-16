@@ -27,6 +27,8 @@ final class SettingsManager {
 
     // Theme
     var _theme: AppTheme?
+    var _tvDesignTheme: TVDesignTheme?
+    var _tvAppearanceMode: AppTheme?
     var _accentColor: AccentColor?
     var _customAccentColor: String?
     var _accentColorDark: AccentColor?
@@ -433,6 +435,8 @@ final class SettingsManager {
     /// Clears cached values to force re-read from storage
     func clearCache() {
         _theme = nil
+        _tvDesignTheme = nil
+        _tvAppearanceMode = nil
         _accentColor = nil
         _customAccentColor = nil
         _accentColorDark = nil

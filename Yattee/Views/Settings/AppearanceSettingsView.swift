@@ -17,7 +17,9 @@ struct AppearanceSettingsView: View {
         SettingsFormContainer {
             if let settings = appEnvironment?.settingsManager {
                 // Theme section
-                #if !os(tvOS)
+                #if os(tvOS)
+                TVAppearanceSection(settings: settings)
+                #else
                 ThemeSection(settings: settings)
                 #endif
 
@@ -48,6 +50,39 @@ struct AppearanceSettingsView: View {
         #endif
     }
 }
+
+// MARK: - TV Appearance
+
+#if os(tvOS)
+private struct TVAppearanceSection: View {
+    @Bindable var settings: SettingsManager
+
+    var body: some View {
+        SettingsFormSection("Theme") {
+            Picker(String(localized: "settings.appearance.tvTheme.title", defaultValue: "Theme"),
+                   selection: $settings.tvDesignTheme) {
+                ForEach(TVDesignTheme.allCases, id: \.self) { theme in
+                    Text(theme.displayName).tag(theme)
+                }
+            }
+            .accessibilityIdentifier("appearance.tvTheme")
+        }
+        SettingsFormSection("Mode") {
+            Picker(String(localized: "settings.appearance.tvMode.title", defaultValue: "Mode"),
+                   selection: $settings.tvAppearanceMode) {
+                ForEach(AppTheme.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .accessibilityIdentifier("appearance.tvMode")
+            Text(String(localized: "settings.appearance.tvMode.footer",
+                        defaultValue: "System follows your Apple TV’s appearance. Theme and mode are saved separately on this Apple TV."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+#endif
 
 // MARK: - Theme Section
 

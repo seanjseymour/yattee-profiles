@@ -121,7 +121,9 @@ struct YatteeApp: App {
                     handleContinuedActivity(activity)
                 }
                 .onAppear {
-                    #if !os(tvOS)
+                    #if os(tvOS)
+                    SettingsManager.applyTVAppearance(appEnvironment.settingsManager.tvAppearanceMode)
+                    #else
                     SettingsManager.applyTheme(appEnvironment.settingsManager.theme)
                     #endif
                     registerBackgroundTasksIfNeeded()
@@ -133,6 +135,13 @@ struct YatteeApp: App {
                     )
                     #endif
                 }
+                #if os(tvOS)
+                // Also cover windows created after initial appearance (including
+                // presentations); new windows must not lose an explicit override.
+                .onReceive(NotificationCenter.default.publisher(for: UIWindow.didBecomeVisibleNotification)) { _ in
+                    SettingsManager.applyTVAppearance(appEnvironment.settingsManager.tvAppearanceMode)
+                }
+                #endif
                 .onReceive(NotificationCenter.default.publisher(for: .continueUserActivity)) { notification in
                     if let activity = notification.object as? NSUserActivity {
                         appEnvironment.navigationCoordinator.dismissPresentations()
@@ -272,6 +281,7 @@ struct YatteeApp: App {
 
             // Handle pending notification navigation and warm cache when becoming active
             if newPhase == .active {
+                SettingsManager.applyTVAppearance(appEnvironment.settingsManager.tvAppearanceMode)
                 // Refresh media source password status (Keychain state can change in background)
                 appEnvironment.mediaSourcesManager.refreshPasswordStoredStatus()
 

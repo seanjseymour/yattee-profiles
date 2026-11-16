@@ -375,42 +375,11 @@ struct HomeView: View {
         return !videos.isEmpty
     }
 
-    /// Whether any source is configured, read from the same managers the Sources
-    /// screen builds its list from. An empty Home is not the same thing as a
-    /// fresh install: with sources already added, telling the user to add one is
-    /// simply wrong.
-    private var hasConfiguredSources: Bool {
-        let hasInstances = !(appEnvironment?.instancesManager.instances.isEmpty ?? true)
-        let hasMediaSources = !(appEnvironment?.mediaSourcesManager.sources.isEmpty ?? true)
-        return hasInstances || hasMediaSources
-    }
-
     private var emptyHomeView: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 12) {
-                if hasConfiguredSources {
-                    // Sources are set up, Home simply has nothing to show yet.
-                    Text(String(localized: "common.noContent"))
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                } else {
-                    Text(String(localized: "home.tvos.empty.title"))
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text(String(localized: "home.tvos.empty.message"))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            Button {
-                appEnvironment?.navigationCoordinator.router.select(.sources)
-            } label: {
-                Label(String(localized: "home.tvos.empty.openSources"), systemImage: "externaldrive.connected.to.line.below")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-            }
+        TVHomeEmptyState {
+            appEnvironment?.navigationCoordinator.router.select(.sources)
         }
-        .padding(60)
+        .padding(.horizontal, 48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -431,9 +400,12 @@ struct HomeView: View {
             }
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    homeContent
+                LazyVStack(alignment: .leading, spacing: 28) {
+                    tvHomeContent
                 }
+                .padding(.horizontal, 32)
+                .padding(.top, 24)
+                .padding(.bottom, 60)
             }
             .scrollClipDisabled()
         }
@@ -451,6 +423,40 @@ struct HomeView: View {
             )
         #endif
     }
+
+    #if os(tvOS)
+    /// Theme only changes presentation. The existing context-aware loaders and
+    /// section visibility remain the source of truth for everything on Home.
+    @ViewBuilder
+    private var tvHomeContent: some View {
+        let sections = settingsManager?.visibleSections() ?? HomeSectionItem.defaultOrder.filter {
+            HomeSectionItem.defaultVisibility[$0] == true
+        }
+        if sections.contains(.continueWatching), historyDisplayMode == .local {
+            if recentContinueWatching.isEmpty {
+                if hasLoadedHomeData {
+                    TVHomeEmptyState {
+                        appEnvironment?.navigationCoordinator.router.select(.sources)
+                    }
+                }
+            } else {
+                TVContinueWatchingShelf(
+                    entries: Array(recentContinueWatching.prefix(sectionItemsLimit)),
+                    theme: settingsManager?.tvDesignTheme ?? .horizon,
+                    queueSource: continueWatchingQueueSource,
+                    loadMoreVideos: loadMoreContinueWatchingCallback,
+                    onRemove: { entry in
+                        dataManager?.removeFromHistory(videoID: entry.videoIdentifier)
+                        loadData()
+                    }
+                )
+            }
+        }
+        ForEach(sections.filter { $0 != .continueWatching }) { section in
+            sectionView(for: section)
+        }
+    }
+    #endif
 
     // MARK: - Home Content
 

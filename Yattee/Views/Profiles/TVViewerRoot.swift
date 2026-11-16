@@ -11,6 +11,7 @@ import SwiftUI
 private struct TVViewerRoot: ViewModifier {
     let router: NavigationRouter
     @Environment(\.appEnvironment) private var appEnvironment
+    @Environment(\.tvDesignPalette) private var palette
     @State private var showingPicker = false
     @FocusState private var launcherFocused: Bool
 
@@ -19,7 +20,11 @@ private struct TVViewerRoot: ViewModifier {
             // Give every root one dedicated viewer header. Search controls
             // and Settings rows start below it.
             .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear
+                Text("Yattee")
+                    .font(.title2.bold())
+                    .foregroundStyle(palette.foreground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 48)
                     .frame(height: 120)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -37,6 +42,7 @@ private struct TVViewerRoot: ViewModifier {
                                 .lineLimit(2)
                                 .multilineTextAlignment(.leading)
                         }
+                        .buttonStyle(TVDesignButtonStyle())
                         .focused($launcherFocused)
                         .accessibilityIdentifier("viewerPicker.open")
                         // Only this root control owns this fallback. Pushed
@@ -60,6 +66,7 @@ private struct TVViewerRoot: ViewModifier {
                     .focusSection()
                 }
             }
+            .background(palette.background.ignoresSafeArea())
             .fullScreenCover(isPresented: $showingPicker, onDismiss: {
                 launcherFocused = true
             }) {

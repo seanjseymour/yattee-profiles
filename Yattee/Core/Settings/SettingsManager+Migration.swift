@@ -26,7 +26,7 @@ extension SettingsManager {
     func migrateLayoutKeysToPlatformPrefixed() {
         guard !localDefaults.bool(forKey: Self.migrationFlagKey) else { return }
 
-        let keysNeedingMigration = SettingsKey.allCases.filter { $0.isPlatformSpecific }
+        let keysNeedingMigration = SettingsKey.allCases.filter { $0.isPlatformSpecific && !$0.isLocalOnly }
         let pushToCloud = iCloudSyncEnabled && syncSettings
 
         for key in keysNeedingMigration {

@@ -376,6 +376,7 @@ struct UnifiedTabView: View {
             sidebarSections
         }
         .tabViewStyle(.sidebarAdaptable)
+        .tvDesignSurface()
         .zoomTransitionNamespace(zoomTransition)
         .onAppear {
             configureSidebarManager()

@@ -12,6 +12,8 @@ import Foundation
 enum SettingsKey: String, CaseIterable {
     // General
     case theme
+    case tvDesignTheme
+    case tvAppearanceMode
     case accentColor
     case customAccentColor
     case accentColorDark
@@ -155,7 +157,7 @@ enum SettingsKey: String, CaseIterable {
     /// in both UserDefaults and iCloud, so each platform family syncs independently.
     var isPlatformSpecific: Bool {
         switch self {
-        case .preferredQuality, .cellularQuality, .allowSoftwareDecodedFormats, .audioOnlyMode,
+        case .tvDesignTheme, .tvAppearanceMode, .preferredQuality, .cellularQuality, .allowSoftwareDecodedFormats, .audioOnlyMode,
              .macPlayerSeparateWindow, .macPlayerFloating, .listStyle,
              .macControlsBarOffsetX, .macControlsBarOffsetY,
              // Home layout — different UI paradigms per platform
@@ -188,7 +190,7 @@ enum SettingsKey: String, CaseIterable {
     /// Used for device-specific settings like custom device name for remote control.
     var isLocalOnly: Bool {
         switch self {
-        case .remoteControlCustomDeviceName, .remoteControlHideWhenBackgrounded,
+        case .tvDesignTheme, .tvAppearanceMode, .remoteControlCustomDeviceName, .remoteControlHideWhenBackgrounded,
              .activeControlsPresetID,  // Per-device preset selection
              .onboardingCompleted:  // Per-device onboarding state
             return true

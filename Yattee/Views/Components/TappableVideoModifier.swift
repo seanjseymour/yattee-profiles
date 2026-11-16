@@ -16,6 +16,8 @@ struct TappableVideoModifier: ViewModifier {
 
     let video: Video
     var startTime: Double? = nil
+    /// An explicitly labelled Resume control plays rather than opening details.
+    var forcePlayback: Bool = false
     var customActions: [VideoContextAction] = []
     var context: VideoContextMenuContext = .default
     var includeContextMenu: Bool = true
@@ -39,6 +41,8 @@ struct TappableVideoModifier: ViewModifier {
     /// Whether queue feature is enabled and something is playing or queued,
     /// so "Play Next" / "Add to Queue" are meaningful alternatives to replacing playback.
     private var shouldShowQueueSheet: Bool {
+        // Resume is an explicit playback action, not an ambiguous video tap.
+        guard !forcePlayback else { return false }
         guard let env = appEnvironment else { return false }
         let queueEnabled = env.settingsManager.queueEnabled
         let state = env.playerService.state
@@ -53,7 +57,7 @@ struct TappableVideoModifier: ViewModifier {
             dismissKeyboard()
             #if os(tvOS)
             let tapAction = appEnvironment?.settingsManager.tvOSVideoTapAction ?? .openInfo
-            if tapAction == .openInfo {
+            if tapAction == .openInfo && !forcePlayback {
                 appEnvironment?.navigationCoordinator.navigate(
                     to: .video(.loaded(video), queueContext: queueContext)
                 )
@@ -159,6 +163,14 @@ struct TappableVideoModifier: ViewModifier {
             return
         }
 
+        // An explicit Resume control takes precedence over the generic video
+        // tap preference (including “start from beginning”). Password checks
+        // already ran, and playVideoWithStartTime retains the queue context.
+        if forcePlayback, let startTime, startTime.isFinite, startTime >= 0 {
+            playVideoWithStartTime(startTime)
+            return
+        }
+
         // Determine the saved progress: prefer explicitly passed startTime, then query database
         // This handles cases where startTime is passed from views like Continue Watching/History
         // that already have the watch position, avoiding issues with data not being synced yet
@@ -243,6 +255,7 @@ extension View {
     func tappableVideo(
         _ video: Video,
         startTime: Double? = nil,
+        forcePlayback: Bool = false,
         customActions: [VideoContextAction] = [],
         context: VideoContextMenuContext = .default,
         includeContextMenu: Bool = true,
@@ -255,6 +268,7 @@ extension View {
         modifier(TappableVideoModifier(
             video: video,
             startTime: startTime,
+            forcePlayback: forcePlayback,
             customActions: customActions,
             context: context,
             includeContextMenu: includeContextMenu,
