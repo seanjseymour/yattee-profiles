@@ -8,6 +8,11 @@
 import SwiftUI
 
 struct SearchView: View {
+    #if os(tvOS)
+    // Shared with the root Viewer region so both native controls have the
+    // same resting centerline. Focus enlargement stays centered on each chip.
+    static let controlsTopPadding: CGFloat = 20
+    #endif
     @Environment(\.appEnvironment) private var appEnvironment
     @Namespace private var sheetTransition
 
@@ -266,7 +271,7 @@ struct SearchView: View {
             }
             .focusSection()
             .padding(.horizontal, 48)
-            .padding(.top, 20)
+            .padding(.top, Self.controlsTopPadding)
             searchContent
                 .padding(.top, 20)
                 .focusSection()

@@ -16,10 +16,12 @@ final class ViewerRemoteUITests: XCTestCase {
         app.terminate()
     }
 
-    private func launch(items: Int, settings: Bool = false) {
+    private func launch(items: Int, settings: Bool = false, search: Bool = false, viewerName: String = "Alpha") {
         continueAfterFailure = false
         app.launchEnvironment["YATTEE_FOCUS_UI_ITEMS"] = String(items)
         app.launchEnvironment["YATTEE_FOCUS_UI_SETTINGS"] = settings ? "1" : "0"
+        app.launchEnvironment["YATTEE_FOCUS_UI_SEARCH"] = search ? "1" : "0"
+        app.launchEnvironment["YATTEE_FOCUS_UI_VIEWER_NAME"] = viewerName
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCTAssertTrue(launcher.waitForExistence(timeout: 30), app.debugDescription)
@@ -114,6 +116,40 @@ final class ViewerRemoteUITests: XCTestCase {
         focused(launcher)
         remote.press(.left)
         focused(sources)
+    }
+
+    func testSearchControlsShareCenterlineAndReachViewer() {
+        checkSearchControls(viewerName: "Alpha")
+    }
+
+    func testSearchLongViewerNameKeepsAlignmentAndReachability() {
+        checkSearchControls(viewerName: "Alexandria Catherine Seymour")
+    }
+
+    private func checkSearchControls(viewerName: String) {
+        launch(items: 0, search: true, viewerName: viewerName)
+        let options = app.buttons["View Options"]
+        focusInitialContent(options)
+        XCTAssertEqual(launcher.frame.midY, options.frame.midY, accuracy: 1)
+        let unfocused = XCTAttachment(screenshot: app.screenshot())
+        unfocused.name = "Search — Viewer unfocused"
+        unfocused.lifetime = .keepAlways
+        add(unfocused)
+        remote.press(.right)
+        focused(launcher)
+        XCTAssertEqual(launcher.frame.midY, options.frame.midY, accuracy: 1)
+        XCTAssertTrue(launcher.label.contains(viewerName))
+        XCTAssertLessThanOrEqual(launcher.frame.maxX, app.frame.maxX)
+        let focusedCapture = XCTAttachment(screenshot: app.screenshot())
+        focusedCapture.name = "Search — Viewer focused"
+        focusedCapture.lifetime = .keepAlways
+        add(focusedCapture)
+        remote.press(.select)
+        focused(app.buttons[viewerName])
+        remote.press(.menu)
+        focused(launcher)
+        remote.press(.left)
+        focused(options)
     }
 
     func testSettingsDetailBackAndLauncherBackStayInApp() {

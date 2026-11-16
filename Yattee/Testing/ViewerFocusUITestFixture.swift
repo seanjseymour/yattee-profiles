@@ -36,7 +36,7 @@ enum ViewerFocusUITestFixture {
         environment.dataManager.save()
         let viewers = environment.viewerProfilesManager
         do {
-            try viewers.rename(id: viewers.profiles[0].id, name: "Alpha")
+            try viewers.rename(id: viewers.profiles[0].id, name: ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_VIEWER_NAME"] ?? "Alpha")
             if !viewers.profiles.contains(where: { $0.name == "Beta" }) {
                 try viewers.add(name: "Beta")
             }
@@ -46,6 +46,8 @@ enum ViewerFocusUITestFixture {
         }
         if ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_SETTINGS"] == "1" {
             environment.navigationCoordinator.router.applyStartupTabIfNeeded(.settings)
+        } else if ProcessInfo.processInfo.environment["YATTEE_FOCUS_UI_SEARCH"] == "1" {
+            environment.navigationCoordinator.router.applyStartupTabIfNeeded(.search)
         }
     }
 }
