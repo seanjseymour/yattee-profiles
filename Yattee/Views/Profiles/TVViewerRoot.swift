@@ -16,15 +16,17 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .focusSection()
-            // Give every root one dedicated viewer header. The content keeps
-            // its full width; Search controls and Settings rows start below it.
+            // Give every root one dedicated viewer header. Search controls
+            // and Settings rows start below it.
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear
                     .frame(height: 100)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            // Include the empty header in the content focus region so Left
+            // from Viewer returns to content rather than the app sidebar.
+            .focusSection()
             .safeAreaInset(edge: .trailing, spacing: 0) {
                 if let viewers = appEnvironment?.viewerProfilesManager {
                     VStack(alignment: .trailing) {
