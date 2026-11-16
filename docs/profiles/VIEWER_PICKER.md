@@ -7,7 +7,7 @@ not reported.
 ## Scope and storage
 
 - tvOS has a visible viewer button above the main content, opening a full-screen
-  picker. The active card receives initial focus. Selecting a card commits and
+  picker. The active viewer row receives initial focus. Selecting a viewer commits and
   dismisses; Back/Close dismiss without changing selection. Focus returns to the
   opener. Add and Rename are explicit actions; switching requires no text entry.
 - First use seeds one Default viewer. Add keeps the current viewer selected.
@@ -54,7 +54,7 @@ not be described as passed based on these checks.
 
 1. Upgrade the accepted app in place. Confirm NAS connection, existing history,
    bookmarks, settings and app identity are retained; official app still coexists.
-2. Open the picker with the Siri Remote. The active card must be initially focused,
+2. Open the picker with the Siri Remote. The active viewer row must be initially focused,
    including after enough profiles are added to place it offscreen.
 3. Add two distinct names. Add alone must not switch viewers. Rename an inactive
    and active viewer; selection and IDs must remain stable. Invalid/duplicate names
@@ -76,3 +76,42 @@ The current TestFlight workflow has `if: github.ref == 'refs/heads/main'`; it wi
 skip a feature-branch dispatch. This guard is intentionally unchanged. The build
 thread must resolve the protected-main promotion/release path with Sean before an
 upload; do not merge or bypass protection from this thread.
+
+## Build 281 directional-focus correction
+
+Starting source: `b664c7865683c1e29776497e418762bb0ea7b5a9`.
+Sean reported that Down or Right from Rename could not reach Add Viewer.
+The old adaptive grid placed Rename inside the scroll view and Add in a separate
+centered footer, with no aligned target in the direction of movement. This is a
+source-based diagnosis consistent with the reported device behavior, not a local
+simulator reproduction. Apple documents that directional focus looks for aligned
+focusable targets: <https://developer.apple.com/documentation/swiftui/view/focussection()>.
+
+The correction uses one vertical scroll view with eager rows: viewer on the left,
+Rename on the right, followed by full-width Add and Close buttons. The layout
+provides continuous vertical targets in both columns. There are no directional
+input handlers or gesture overrides. All controls have stable focus IDs. Initial
+presentation scrolls to the active viewer; ending an editor returns to its opener
+(Add or that viewer's Rename), including Save, Cancel, and Back. Debug focus logs
+record only the control kind, not names or UUIDs.
+
+Retest on a tvOS simulator and physical Apple TV:
+
+- One viewer: initial focus is on the viewer. Right reaches Rename; Down reaches
+  Add; Up reaches a viewer-row control (Left/Right moves between viewer/Rename).
+  Down from Add reaches Close, and Up returns to Add.
+- Many viewers (enough to scroll): Up/Down traverses both columns to Add and back.
+  Left/Right crosses each row. No dead end at the first/last visible row. Select
+  an offscreen viewer, reopen, and verify it is scrolled into view and focused.
+- Add: Save a new name, cancel a second attempt, and dismiss a third with Back.
+  Each returns focus to Add without changing the active viewer. Up reaches the
+  newly added row; Right reaches its Rename.
+- Rename: Save, Cancel, Back, and invalid/duplicate-name errors return focus to
+  the same Rename control. Its neighboring viewer and Add remain reachable.
+- Back from the picker dismisses without switching. Selecting a viewer still
+  saves and dismisses; the opener regains focus. Relaunch preserves selection.
+- Confirm the shared NAS connection and playback work without another login.
+
+The local executor is Linux with no Swift/Xcode/tvOS simulator. The existing
+unsigned CI workflow can verify compilation only, not these focus interactions.
+Do not mark this device blocker resolved until the directional retest passes.
