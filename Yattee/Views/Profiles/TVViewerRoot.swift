@@ -25,9 +25,9 @@ private struct TVViewerRoot: ViewModifier {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-            .overlay(alignment: .topTrailing) {
+            .safeAreaInset(edge: .trailing, spacing: 0) {
                 if let viewers = appEnvironment?.viewerProfilesManager {
-                    VStack {
+                    VStack(alignment: .trailing) {
                         Button {
                             showingPicker = true
                         } label: {
@@ -42,15 +42,17 @@ private struct TVViewerRoot: ViewModifier {
                         .if(router.selection != .home) { button in
                             button.onExitCommand { router.select(.home) }
                         }
+                        .frame(width: 300)
                         Spacer(minLength: 0)
                     }
-                    .frame(width: 300)
+                    // Only the narrow gutter is reserved beside content. The
+                    // header button extends left into the empty header above.
+                    .frame(width: 60, alignment: .trailing)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.trailing, 60)
                     .padding(.vertical, 12)
-                    // The transparent remainder is a native focus region,
-                    // not a content column or a gesture interceptor. It lets
-                    // Right from a shelf reach the header after its last tile.
+                    // Keep the focus region adjacent, not layered over the
+                    // content: overlapping regions don't connect on tvOS.
                     .focusSection()
                 }
             }
