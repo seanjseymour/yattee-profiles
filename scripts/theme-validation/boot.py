@@ -1,6 +1,8 @@
-import json, os, subprocess, time
+import json, os, platform, subprocess, time
 from pathlib import Path
 out = Path(os.environ['CI_OUTPUT']); out.mkdir(parents=True, exist_ok=True)
+assert platform.machine() == 'x86_64', 'Intel fallback must run on the standard x86_64 host'
+(out / 'host-architecture.txt').write_text(platform.machine())
 def run(args, name, timeout=60):
     with (out / name).open('w') as f:
         subprocess.run(args, stdout=f, stderr=subprocess.STDOUT, check=True, timeout=timeout)
@@ -10,6 +12,8 @@ runtimes = {r['identifier']: r for r in data['runtimes'] if r.get('isAvailable')
 choices = [(runtimes[r], d) for r, ds in data['devices'].items() if r in runtimes and runtimes[r]['version'] == '26.5' for d in ds if d.get('isAvailable') and d.get('deviceTypeIdentifier') == 'com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-1080p']
 assert choices, 'Explicit alternate tvOS26.5 / third-gen1080p unavailable; no substitution'
 runtime, device = choices[0]; udid = device['udid']
+if runtime.get('supportedArchitectures'):
+    assert 'x86_64' in runtime['supportedArchitectures'], 'Selected runtime lacks Intel support'
 (out / 'selected-device.json').write_text(json.dumps({'runtime': runtime, 'device': device}, indent=2))
 (out / 'simulator-id.txt').write_text(udid)
 with open(os.environ['GITHUB_ENV'], 'a') as f: f.write('TVOS_SIM_UDID=' + udid + '\n')

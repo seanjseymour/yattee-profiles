@@ -1,15 +1,15 @@
-name: Integrated themes viewer history unsigned validation
+name: Isolated Intel Search contrast validation
 'on':
   push:
-    branches: [validation/integrated-themes-1270618b]
+    branches: [validation/search-intel-f36884ea]
 permissions:
   contents: read
 concurrency:
-  group: integrated-themes-viewer-validation
+  group: search-intel-f36884ea-validation
   cancel-in-progress: false
 jobs:
   evidence:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 45
     defaults:
       run:
@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD^{tree})" = 4d666f13f4c9883e11fb55260eb0b5c2c68de836
-          test "$(uname -m)" = arm64
+          test "$(uname -m)" = x86_64
           test -d "$DEVELOPER_DIR"
           mkdir -p "$RUNNER_TEMP/integrated-evidence"
           {
@@ -66,8 +66,9 @@ jobs:
             -destination 'generic/platform=tvOS Simulator' -derivedDataPath "$DERIVED_DATA" \
             -clonedSourcePackagesDirPath "$PACKAGE_CACHE" -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile -resultBundlePath "$CI_OUTPUT/fixture-build.xcresult" \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            ARCHS=x86_64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
             2>&1 | tee "$CI_OUTPUT/fixture-build.log"
+          test "$(lipo -archs "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app/Yattee")" = x86_64
           tar -C "$DERIVED_DATA/Build/Products/Debug-appletvsimulator" -czf "$CI_OUTPUT/integrated-fixture-app.tar.gz" Yattee.app
       - name: Verify simulator remains booted and install
         id: install
@@ -101,6 +102,7 @@ jobs:
             echo 'Targeted Search4looks, both focus states, short+long Viewer navigation: ${{ steps.remote.outcome }}.'
             echo 'Unchanged history, Settings/System and unit layers passed in run43846494165; not rerun here.'
             echo 'Search-only one-line fix after972e8aae. This corrected source compiled once with six audited simulator fixture deltas.'
+            echo 'Standard macos-26-intel; fresh x86_64 app and UI-test build, no reused arm64 binaries.'
             echo 'Unsigned isolated evidence only. Screenshots require independent actual-render review. No release.'
           } | tee "$CI_OUTPUT/outcomes.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Require complete validation coverage

@@ -10,5 +10,5 @@ xcodebuild test -project "$RUNNER_TEMP/theme-ui-project/FocusRemote.xcodeproj" \
  -resultBundlePath "$CI_OUTPUT/theme-remote.xcresult" \
  -only-testing:FocusRemote/ThemeRemoteUITests/testSearchFocusedAndUnfocusedContrastRegression \
  -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
- CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+ ARCHS=x86_64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
  2>&1 | tee "$CI_OUTPUT/theme-remote.log"
