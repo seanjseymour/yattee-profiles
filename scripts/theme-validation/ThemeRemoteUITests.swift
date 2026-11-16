@@ -338,6 +338,42 @@ final class ThemeRemoteUITests: XCTestCase {
         capture("Return to Alpha restores its progress without changing appearance")
     }
 
+    func testSearchFocusedAndUnfocusedContrastRegression() {
+        continueAfterFailure = false
+        for theme in ["horizon", "slate"] {
+            for mode in ["light", "dark"] {
+                for name in ["Alpha", "Alexandria Catherine Seymour"] {
+                    let label = "Search-\(theme)-\(mode)-\(name)"
+                    launch(items: 0, theme: theme, mode: mode, search: true, viewerName: name)
+                    let options = app.buttons["View Options"]
+                    focusContent(app.textFields.firstMatch)
+                    capture("\(label) field focused Options unfocused")
+                    remote.press(.right)
+                    focused(options)
+                    XCTAssertLessThan(launcher.frame.maxY + 12, options.frame.minY)
+                    capture("\(label) Options focused")
+                    remote.press(.right)
+                    focused(launcher)
+                    XCTAssertLessThan(launcher.frame.maxY + 12, options.frame.minY)
+                    XCTAssertLessThanOrEqual(launcher.frame.maxX, app.frame.maxX)
+                    capture("\(label) Viewer focused Options unfocused")
+                    remote.press(.select)
+                    focused(app.buttons[name])
+                    remote.press(.menu)
+                    focused(launcher)
+                    remote.press(.left)
+                    focused(options)
+                    remote.press(.select)
+                    capture("\(label) Options presented")
+                    remote.press(.menu)
+                    focused(options)
+                    assertState(theme: theme, mode: mode, actual: mode)
+                    capture("\(label) Options focused after Back")
+                }
+            }
+        }
+    }
+
     func testPickerRenameDownAddCancelAndReturn() {
         continueAfterFailure = false
         launch(items: 1, theme: "horizon", mode: "light")

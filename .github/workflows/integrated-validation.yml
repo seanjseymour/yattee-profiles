@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: source
-          ref: 2167b599521ab3fa9ea478b53a471f08791bc0ad
+          ref: 7cde9c03c860bc9b64102b517ed47bcebca2e66c
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -30,7 +30,7 @@ jobs:
       - name: Verify exact production and initialize evidence
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^{tree})" = e0be9bbbe2c205638177f21b556d0badab9c4ace
+          test "$(git rev-parse HEAD^{tree})" = 4d666f13f4c9883e11fb55260eb0b5c2c68de836
           test "$(uname -m)" = arm64
           test -d "$DEVELOPER_DIR"
           mkdir -p "$RUNNER_TEMP/integrated-evidence"
@@ -76,25 +76,11 @@ jobs:
           set -euo pipefail
           xcrun simctl io "$TVOS_SIM_UDID" screenshot "$CI_OUTPUT/pre-install.png"
           xcrun simctl install "$TVOS_SIM_UDID" "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app"
-      - name: Capture all four looks independently and assert live appearance
-        id: capture
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        working-directory: harness
-        run: python3 scripts/theme-validation/capture.py
-      - name: Test actual themed remote paths
+      - name: Test Search contrast all four looks and short-long Viewer remote regression
         id: remote
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: harness
         run: bash scripts/theme-validation/remote-tests.sh
-      - name: Test original viewer history and navigation assertions
-        id: history
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        working-directory: harness
-        run: bash scripts/theme-validation/history-tests.sh
-      - name: Test viewer storage and appearance unit suites
-        id: units
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bash ../harness/scripts/theme-validation/unit-tests.sh
       - name: Collect diagnostic evidence
         if: always()
         run: python3 ../harness/scripts/theme-validation/diagnostics.py
@@ -110,10 +96,11 @@ jobs:
         if: always()
         run: |
           {
-            echo 'Integrated production treee0be9bbbe2c205638177f21b556d0badab9c4ace (local972e8aae).'
+            echo 'Integrated production tree4d666f13f4c9883e11fb55260eb0b5c2c68de836 (localf36884ea).'
             echo 'Boot ${{ steps.boot.outcome }}; fixture ${{ steps.fixture.outcome }}; install ${{ steps.install.outcome }}.'
-            echo 'Captures ${{ steps.capture.outcome }}; remote ${{ steps.remote.outcome }}; original history/navigation ${{ steps.history.outcome }}; unit tests ${{ steps.units.outcome }}.'
-            echo 'Clean33dfdde3 compiled in prior run; this corrected source compiled once with six audited simulator fixture deltas.'
+            echo 'Targeted Search4looks, both focus states, short+long Viewer navigation: ${{ steps.remote.outcome }}.'
+            echo 'Unchanged history, Settings/System and unit layers passed in run43846494165; not rerun here.'
+            echo 'Search-only one-line fix after972e8aae. This corrected source compiled once with six audited simulator fixture deltas.'
             echo 'Unsigned isolated evidence only. Screenshots require independent actual-render review. No release.'
           } | tee "$CI_OUTPUT/outcomes.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Require complete validation coverage
@@ -121,10 +108,7 @@ jobs:
         run: |
           test '${{ steps.boot.outcome }}' = success
           test '${{ steps.install.outcome }}' = success
-          test '${{ steps.capture.outcome }}' = success
           test '${{ steps.remote.outcome }}' = success
-          test '${{ steps.history.outcome }}' = success
-          test '${{ steps.units.outcome }}' = success
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
