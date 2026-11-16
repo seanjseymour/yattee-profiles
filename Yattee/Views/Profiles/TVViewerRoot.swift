@@ -18,7 +18,6 @@ private struct TVViewerRoot: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scrollContentBackground(.hidden)
             .focusSection()
             .safeAreaInset(edge: .top, spacing: 24) {
                 header
