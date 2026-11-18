@@ -65,6 +65,8 @@ jobs:
           git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       # Compile once. Later steps reuse these products, so a test retry never rebuilds.
+      # Ad-hoc ("Sign to Run Locally") signing: no certificate, profile or secret. Without it the
+      # simulator app has no CloudKit/KVS entitlements and the test host crashes at launch.
       - name: Build app, Top Shelf extension and unit tests
         id: build
         run: |
@@ -79,9 +81,10 @@ jobs:
             -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile \
             -resultBundlePath "$CI_OUTPUT/tvos-build.xcresult" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY= \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_IDENTITY=- \
             2>&1 | tee "$CI_OUTPUT/build.log"
 
       # A failure in this step is runner/infrastructure by definition.
@@ -170,12 +173,19 @@ jobs:
           total = summary.get("totalTestCount", 0)
           failed = summary.get("failedTests", 0)
 
+          def count_cases(node, in_system=False):
+              in_system = in_system or node.get("name") == "System Failures"
+              own = 1 if node.get("nodeType") == "Test Case" and not in_system else 0
+              return own + sum(count_cases(c, in_system) for c in node.get("children", []))
+          # "System Failures" (e.g. the test host crashed before connecting) are not tests that ran.
+          ran = sum(count_cases(n) for n in (tree or {}).get("testNodes", [])) if tree else total
+
           if build != "success":
               verdict = f"did not build (build step: {build or 'not reached'}); see build.log and earlier steps"
           elif boot != "success":
               verdict = "runner/infrastructure: simulator did not boot"
-          elif total == 0:
-              verdict = "runner/infrastructure: zero tests started"
+          elif ran == 0:
+              verdict = "runner/infrastructure: zero tests started (see system failures below and test.log)"
           elif failed:
               verdict = "app or test failure"
           elif tests == "success":
@@ -187,7 +197,7 @@ jobs:
           print(f"**Classification: {verdict}**\n")
           print(f"Steps: build={build or '-'}, boot={boot or '-'}, tests={tests or '-'}\n")
           if summary:
-              print(f"Tests: {total} total, {summary.get('passedTests', 0)} passed, {failed} failed, "
+              print(f"Tests: {ran} ran; xcresult counts {total} total, {summary.get('passedTests', 0)} passed, {failed} failed, "
                     f"{summary.get('skippedTests', 0)} skipped, {summary.get('expectedFailures', 0)} expected failures\n")
 
           def walk(node):
