@@ -13,9 +13,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build unsigned tvOS simulator app
+    name: Build and test unsigned tvOS simulator app
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -64,10 +64,12 @@ jobs:
             2>&1 | tee "$CI_OUTPUT/packages.log"
           git diff --exit-code -- Yattee.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
-      - name: Build simulator application and Top Shelf extension
+      # Compile once. Later steps reuse these products, so a test retry never rebuilds.
+      - name: Build app, Top Shelf extension and unit tests
+        id: build
         run: |
           set -euo pipefail
-          xcodebuild build \
+          xcodebuild build-for-testing \
             -project Yattee.xcodeproj \
             -scheme Yattee \
             -configuration Debug \
@@ -82,15 +84,137 @@ jobs:
             CODE_SIGN_IDENTITY= \
             2>&1 | tee "$CI_OUTPUT/build.log"
 
-      - name: Summarize scope
-        if: always()
+      # A failure in this step is runner/infrastructure by definition.
+      - name: Boot tvOS simulator
+        id: boot
+        timeout-minutes: 10
         run: |
-          {
-            echo '## tvOS simulator baseline'
-            echo '- Unsigned build only. No TestFlight upload or Apple account access.'
-            echo '- No simulator launch, UI tests, physical-device tests, or playback verification.'
-            echo '- Inspect the build step outcome and attached diagnostics before calling the build successful.'
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          xcrun simctl list devices available > "$CI_OUTPUT/simulators.txt" 2>&1
+          udid="$(python3 - <<'PY'
+          import json, re, subprocess, sys
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "--json", "devices", "available"]))
+          def version(runtime):
+              m = re.search(r"tvOS-(\d+)-(\d+)", runtime)
+              return tuple(int(x) for x in m.groups()) if m else (0, 0)
+          candidates = sorted(
+              ((version(rt), d["name"] == "Apple TV", d["udid"], d["name"], rt)
+               for rt, devices in data["devices"].items() if "tvOS" in rt
+               for d in devices if d.get("isAvailable", True)),
+              reverse=True)
+          if not candidates:
+              sys.exit("No available tvOS simulator on this runner")
+          best = candidates[0]
+          print(f"Using {best[3]} ({best[4]}) {best[2]}", file=sys.stderr)
+          print(best[2])
+          PY
+          )"
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$udid" 2>&1 || true  # "already booted" is fine; bootstatus confirms
+          xcrun simctl bootstatus "$udid" -b 2>&1 | tee "$CI_OUTPUT/boot.log"
+
+      - name: Run fork unit tests
+        id: tests
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          xctestruns=("$DERIVED_DATA"/Build/Products/*.xctestrun)
+          if [ "${#xctestruns[@]}" -ne 1 ]; then
+            echo "Expected one .xctestrun file, found ${#xctestruns[@]}" >&2
+            exit 1
+          fi
+          # Serial: TVAppearanceSettingsTests uses the host app's UserDefaults.standard.
+          xcodebuild test-without-building \
+            -xctestrun "${xctestruns[0]}" \
+            -destination "id=$SIM_UDID" \
+            -only-testing:YatteeTests/ViewerWatchStoreTests \
+            -only-testing:YatteeTests/ViewerProfilesTests \
+            -only-testing:YatteeTests/TVAppearanceSettingsTests \
+            -only-testing:YatteeTests/URLRouterTests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$CI_OUTPUT/tvos-tests.xcresult" \
+            2>&1 | tee "$CI_OUTPUT/test.log"
+
+      - name: Classify result
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BOOT_OUTCOME: ${{ steps.boot.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          python3 - <<'PY' | tee "$CI_OUTPUT/classification.md" >> "$GITHUB_STEP_SUMMARY"
+          import json, os, subprocess, sys
+          out = os.environ["CI_OUTPUT"]
+          bundle = os.path.join(out, "tvos-tests.xcresult")
+          build, boot, tests = (os.environ.get(k, "") for k in ("BUILD_OUTCOME", "BOOT_OUTCOME", "TESTS_OUTCOME"))
+
+          def results(kind):
+              r = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", kind, "--path", bundle],
+                                 capture_output=True, text=True)
+              if r.returncode:
+                  print(f"xcresulttool {kind} failed: {r.stderr.strip()}", file=sys.stderr)
+                  return None
+              with open(os.path.join(out, f"test-results-{kind}.json"), "w") as f:
+                  f.write(r.stdout)
+              try:
+                  return json.loads(r.stdout)
+              except ValueError as error:
+                  print(f"xcresulttool {kind} returned unreadable JSON: {error}", file=sys.stderr)
+                  return None
+
+          summary = tree = None
+          if os.path.isdir(bundle):
+              summary, tree = results("summary"), results("tests")
+          summary = summary or {}
+          total = summary.get("totalTestCount", 0)
+          failed = summary.get("failedTests", 0)
+
+          if build != "success":
+              verdict = f"did not build (build step: {build or 'not reached'}); see build.log and earlier steps"
+          elif boot != "success":
+              verdict = "runner/infrastructure: simulator did not boot"
+          elif total == 0:
+              verdict = "runner/infrastructure: zero tests started"
+          elif failed:
+              verdict = "app or test failure"
+          elif tests == "success":
+              verdict = "passed"
+          else:
+              verdict = "unclassified: xcodebuild failed but no test failed; see test.log"
+
+          print("## tvOS simulator tests\n")
+          print(f"**Classification: {verdict}**\n")
+          print(f"Steps: build={build or '-'}, boot={boot or '-'}, tests={tests or '-'}\n")
+          if summary:
+              print(f"Tests: {total} total, {summary.get('passedTests', 0)} passed, {failed} failed, "
+                    f"{summary.get('skippedTests', 0)} skipped, {summary.get('expectedFailures', 0)} expected failures\n")
+
+          def walk(node):
+              if node.get("nodeType") == "Test Suite":
+                  counts = {}
+                  for child in node.get("children", []):
+                      if child.get("nodeType") == "Test Case":
+                          counts[child.get("result", "?")] = counts.get(child.get("result", "?"), 0) + 1
+                  if counts:
+                      print(f"- {node.get('name')}: " + ", ".join(f"{v} {k.lower()}" for k, v in sorted(counts.items())))
+              for child in node.get("children", []):
+                  walk(child)
+          if tree:
+              print("Per suite:\n")
+              for node in tree.get("testNodes", []):
+                  walk(node)
+              print()
+
+          for failure in summary.get("testFailures", []):
+              text = " ".join(str(failure.get("failureText", "")).split())[:500]
+              print(f"- FAILED {failure.get('targetName', '')}/{failure.get('testName', '')}: {text}")
+
+          print("\nScope: unsigned simulator build and unit tests only. No TestFlight, Apple account access, "
+                "UI tests, physical device or playback verification.")
+          PY
+          echo "--- classification ---"
+          cat "$CI_OUTPUT/classification.md"
 
       - name: Preserve diagnostic logs
         if: always()
@@ -100,3 +224,18 @@ jobs:
           path: ${{ runner.temp }}/yattee-ci-output
           if-no-files-found: warn
           retention-days: 7
+
+  python-scripts:
+    name: Python script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out selected revision with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # test_configure_profiles.py reads baseline commit 71b3b2c with git show.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run script unit tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
