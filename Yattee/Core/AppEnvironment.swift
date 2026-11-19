@@ -17,7 +17,7 @@ final class AppEnvironment {
     // MARK: - Services
 
     #if os(tvOS)
-    let viewerProfilesManager = ViewerProfilesManager()
+    let viewerProfilesManager = ViewerProfilesManager(defaults: AppEnvironment.viewerProfileDefaults())
     #endif
 
     let settingsManager: SettingsManager
@@ -191,8 +191,14 @@ final class AppEnvironment {
         self.downloadSettings = DownloadSettings()
 
         // Initialize DataManager, falling back to in-memory for failures
+        var providedDataManager = dataManager
+        #if DEBUG && os(tvOS)
+        if providedDataManager == nil, UITestMode.isActive {
+            providedDataManager = try? DataManager(inMemory: true)
+        }
+        #endif
         let dm: DataManager
-        if let manager = dataManager {
+        if let manager = providedDataManager {
             dm = manager
         } else {
             do {
@@ -208,7 +214,7 @@ final class AppEnvironment {
         let viewerManager = viewerProfilesManager
         let viewerHistoryURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("YatteeProfiles/ViewerWatch-v1.json")
-        dm.viewerWatchStore = ViewerWatchStore(fileURL: viewerHistoryURL)
+        dm.viewerWatchStore = Self.makeViewerWatchStore(defaultURL: viewerHistoryURL)
         dm.historyViewerID = { [weak viewerManager] in
             guard let viewerManager, !viewerManager.storageUnavailable else { return nil }
             return viewerManager.activeViewerID
@@ -727,7 +733,37 @@ final class AppEnvironment {
             self.downloadManager.logOrphanDiagnostics()
         }
         #endif
+
+        #if DEBUG && os(tvOS)
+        if UITestMode.isActive {
+            UITestMode.configure(self)
+        }
+        #endif
     }
+
+    #if os(tvOS)
+    /// Viewer profiles live in `.standard`, except in the Debug-only UI test
+    /// mode, which uses a throwaway suite. Runs before any other store is made.
+    private static func viewerProfileDefaults() -> UserDefaults {
+        #if DEBUG
+        if UITestMode.isActive {
+            _ = UITestMode.prepare
+            return UITestMode.defaults
+        }
+        #endif
+        return .standard
+    }
+
+    private static func makeViewerWatchStore(defaultURL: URL) -> ViewerWatchStore {
+        #if DEBUG
+        if UITestMode.isActive {
+            return ViewerWatchStore(fileURL: UITestMode.watchStoreURL, defaults: UITestMode.defaults,
+                                    defaultsDomainName: UITestMode.suiteName)
+        }
+        #endif
+        return ViewerWatchStore(fileURL: defaultURL)
+    }
+    #endif
     
     /// Cleans up all temporary subtitle files from previous sessions.
     /// Call this on app launch to ensure temp directory doesn't accumulate old files.

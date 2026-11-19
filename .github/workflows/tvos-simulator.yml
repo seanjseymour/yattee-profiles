@@ -3,6 +3,11 @@ name: tvOS simulator baseline
 # Deliberately manual: no signing credentials, deployment, or automatic runs.
 on:
   workflow_dispatch:
+    inputs:
+      check_release_isolation:
+        description: Also build Release and check the UI test mode is compiled out (adds a Release build)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,9 +18,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test unsigned tvOS simulator app
+    name: Build and test ad-hoc signed tvOS simulator app
     runs-on: xcode-27
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -127,7 +132,8 @@ jobs:
             echo "Expected one .xctestrun file, found ${#xctestruns[@]}" >&2
             exit 1
           fi
-          # Serial: TVAppearanceSettingsTests uses the host app's UserDefaults.standard.
+          # Serial keeps the log readable. TVAppearanceSettingsTests is also
+          # .serialized and restores the UserDefaults keys it touches.
           xcodebuild test-without-building \
             -xctestrun "${xctestruns[0]}" \
             -destination "id=$SIM_UDID" \
@@ -139,92 +145,177 @@ jobs:
             -resultBundlePath "$CI_OUTPUT/tvos-tests.xcresult" \
             2>&1 | tee "$CI_OUTPUT/test.log"
 
+      # Same build products. Runs even if unit tests failed; needs a booted simulator.
+      - name: Run UI tests
+        id: uitests
+        if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          xctestruns=("$DERIVED_DATA"/Build/Products/*.xctestrun)
+          if [ "${#xctestruns[@]}" -ne 1 ]; then
+            echo "Expected one .xctestrun file, found ${#xctestruns[@]}" >&2
+            exit 1
+          fi
+          xcodebuild test-without-building \
+            -xctestrun "${xctestruns[0]}" \
+            -destination "id=$SIM_UDID" \
+            -only-testing:YatteeUITests \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 420 \
+            -resultBundlePath "$CI_OUTPUT/tvos-uitests.xcresult" \
+            2>&1 | tee "$CI_OUTPUT/uitest.log"
+
+      - name: Export UI test screenshots and app log
+        if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
+        run: |
+          if [ -d "$CI_OUTPUT/tvos-uitests.xcresult" ]; then
+            xcrun xcresulttool export attachments \
+              --path "$CI_OUTPUT/tvos-uitests.xcresult" \
+              --output-path "$CI_OUTPUT/ui-attachments" || echo "Attachment export failed"
+          fi
+          xcrun simctl spawn "$SIM_UDID" log show --style compact --last 60m \
+            --predicate 'process == "Yattee"' 2>&1 | tail -n 30000 > "$CI_OUTPUT/app-simulator.log" || true
+
+      - name: Check UI test mode is absent from Release
+        id: release_isolation
+        if: ${{ !cancelled() && inputs.check_release_isolation && steps.build.outcome == 'success' }}
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          release_data="$RUNNER_TEMP/yattee-release-derived-data"
+          xcodebuild build \
+            -project Yattee.xcodeproj \
+            -scheme Yattee \
+            -configuration Release \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath "$release_data" \
+            -clonedSourcePackagesDirPath "$PACKAGE_CACHE" \
+            -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            > "$CI_OUTPUT/release-build.log" 2>&1
+          tail -n 3 "$CI_OUTPUT/release-build.log"
+          hits() {
+            find "$1" -type f \( -name Yattee -o -name '*.dylib' \) -print0 \
+              | xargs -0 strings -a | grep -c -e YatteeUITestMode -e 'UITest A Seeded Video' || true
+          }
+          debug_hits=$(hits "$DERIVED_DATA/Build/Products/Debug-appletvsimulator/Yattee.app")
+          release_hits=$(hits "$release_data/Build/Products/Release-appletvsimulator/Yattee.app")
+          echo "Test-mode strings: Debug app $debug_hits, Release app $release_hits" | tee "$CI_OUTPUT/release-isolation.txt"
+          # Control: the check finds the strings where they must be.
+          test "$debug_hits" -gt 0
+          test "$release_hits" -eq 0
+
       - name: Classify result
         if: always()
         env:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           BOOT_OUTCOME: ${{ steps.boot.outcome }}
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          UITESTS_OUTCOME: ${{ steps.uitests.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release_isolation.outcome }}
         run: |
           python3 - <<'PY' | tee "$CI_OUTPUT/classification.md" >> "$GITHUB_STEP_SUMMARY"
           import json, os, subprocess, sys
           out = os.environ["CI_OUTPUT"]
-          bundle = os.path.join(out, "tvos-tests.xcresult")
-          build, boot, tests = (os.environ.get(k, "") for k in ("BUILD_OUTCOME", "BOOT_OUTCOME", "TESTS_OUTCOME"))
+          build, boot = os.environ.get("BUILD_OUTCOME", ""), os.environ.get("BOOT_OUTCOME", "")
 
-          def results(kind):
+          def results(bundle, kind, stem):
               r = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", kind, "--path", bundle],
                                  capture_output=True, text=True)
               if r.returncode:
-                  print(f"xcresulttool {kind} failed: {r.stderr.strip()}", file=sys.stderr)
+                  print(f"xcresulttool {kind} failed for {stem}: {r.stderr.strip()}", file=sys.stderr)
                   return None
-              with open(os.path.join(out, f"test-results-{kind}.json"), "w") as f:
+              with open(os.path.join(out, f"{stem}-results-{kind}.json"), "w") as f:
                   f.write(r.stdout)
               try:
                   return json.loads(r.stdout)
               except ValueError as error:
-                  print(f"xcresulttool {kind} returned unreadable JSON: {error}", file=sys.stderr)
+                  print(f"xcresulttool {kind} returned unreadable JSON for {stem}: {error}", file=sys.stderr)
                   return None
 
-          summary = tree = None
-          if os.path.isdir(bundle):
-              summary, tree = results("summary"), results("tests")
-          summary = summary or {}
-          total = summary.get("totalTestCount", 0)
-          failed = summary.get("failedTests", 0)
-
-          def count_cases(node, in_system=False):
+          def cases(node, suite="", in_system=False):
+              """(suite, test, result, in_system) for every test case."""
               in_system = in_system or node.get("name") == "System Failures"
-              own = 1 if node.get("nodeType") == "Test Case" and not in_system else 0
-              return own + sum(count_cases(c, in_system) for c in node.get("children", []))
-          # "System Failures" (e.g. the test host crashed before connecting) are not tests that ran.
-          ran = sum(count_cases(n) for n in (tree or {}).get("testNodes", [])) if tree else total
+              if node.get("nodeType") == "Test Suite":
+                  suite = node.get("name", suite)
+              if node.get("nodeType") == "Test Case":
+                  yield suite, node.get("name", "?"), node.get("result", "?"), in_system
+              for child in node.get("children", []):
+                  yield from cases(child, suite, in_system)
 
-          if build != "success":
-              verdict = f"did not build (build step: {build or 'not reached'}); see build.log and earlier steps"
-          elif boot != "success":
-              verdict = "runner/infrastructure: simulator did not boot"
-          elif ran == 0:
-              verdict = "runner/infrastructure: zero tests started (see system failures below and test.log)"
-          elif failed:
-              verdict = "app or test failure"
-          elif tests == "success":
-              verdict = "passed"
-          else:
-              verdict = "unclassified: xcodebuild failed but no test failed; see test.log"
+          def classify(stem, outcome, log):
+              if outcome in ("", "skipped"):
+                  return "not run", None, []
+              bundle = os.path.join(out, stem + ".xcresult")
+              summary = tree = None
+              if os.path.isdir(bundle):
+                  summary, tree = results(bundle, "summary", stem), results(bundle, "tests", stem)
+              if not summary:
+                  # A killed or hung step can leave no readable bundle. That is not
+                  # evidence of a runner problem, so it is not called one.
+                  return f"test step ended without results ({outcome}): timeout, hang or crash; see {log}", None, []
+              failures = summary.get("testFailures", [])
+              all_cases = [c for n in (tree or {}).get("testNodes", []) for c in cases(n)]
+              if tree:
+                  ran = sum(1 for c in all_cases if not c[3])
+              else:
+                  system = [f for f in failures if "encountered an error" in str(f.get("testName", ""))
+                            or "crashed" in str(f.get("failureText", ""))]
+                  ran = max(0, summary.get("totalTestCount", 0) - len(system))
+              if ran == 0:
+                  verdict = f"runner/infrastructure: zero tests started (see system failures below and {log})"
+              elif summary.get("failedTests", 0):
+                  verdict = "app or test failure"
+              elif outcome == "success":
+                  verdict = "passed"
+              else:
+                  verdict = f"unclassified: step {outcome} but no test failed; see {log}"
+              summary["_ran"] = ran
+              return verdict, summary, all_cases
 
           print("## tvOS simulator tests\n")
-          print(f"**Classification: {verdict}**\n")
-          print(f"Steps: build={build or '-'}, boot={boot or '-'}, tests={tests or '-'}\n")
-          if summary:
-              print(f"Tests: {ran} ran; xcresult counts {total} total, {summary.get('passedTests', 0)} passed, {failed} failed, "
-                    f"{summary.get('skippedTests', 0)} skipped, {summary.get('expectedFailures', 0)} expected failures\n")
+          print(f"Steps: build={build or '-'}, boot={boot or '-'}, unit={os.environ.get('TESTS_OUTCOME') or '-'}, "
+                f"ui={os.environ.get('UITESTS_OUTCOME') or '-'}, release-isolation={os.environ.get('RELEASE_OUTCOME') or '-'}\n")
+          if build != "success":
+              print(f"**Classification: did not build (build step: {build or 'not reached'}); see build.log and earlier steps**\n")
+          elif boot != "success":
+              print("**Classification: runner/infrastructure: simulator did not boot**\n")
+          else:
+              for title, stem, env, log in (("Unit tests", "tvos-tests", "TESTS_OUTCOME", "test.log"),
+                                            ("UI tests", "tvos-uitests", "UITESTS_OUTCOME", "uitest.log")):
+                  verdict, summary, all_cases = classify(stem, os.environ.get(env, ""), log)
+                  print(f"### {title}\n\n**Classification: {verdict}**\n")
+                  if summary:
+                      print(f"Tests: {summary['_ran']} ran; xcresult counts {summary.get('totalTestCount', 0)} total, "
+                            f"{summary.get('passedTests', 0)} passed, {summary.get('failedTests', 0)} failed, "
+                            f"{summary.get('skippedTests', 0)} skipped\n")
+                  per_suite = {}
+                  for suite, _, result, _ in all_cases:
+                      per_suite.setdefault(suite, {}).setdefault(result, 0)
+                      per_suite[suite][result] += 1
+                  for suite, counts in per_suite.items():
+                      print(f"- {suite}: " + ", ".join(f"{v} {k.lower()}" for k, v in sorted(counts.items())))
+                  if stem == "tvos-uitests":
+                      for suite, name, result, _ in all_cases:
+                          print(f"  - {name}: {result}")
+                  for failure in (summary or {}).get("testFailures", []):
+                      text = " ".join(str(failure.get("failureText", "")).split())[:500]
+                      print(f"- FAILED {failure.get('targetName', '')}/{failure.get('testName', '')}: {text}")
+                  print()
 
-          def walk(node):
-              if node.get("nodeType") == "Test Suite":
-                  counts = {}
-                  for child in node.get("children", []):
-                      if child.get("nodeType") == "Test Case":
-                          counts[child.get("result", "?")] = counts.get(child.get("result", "?"), 0) + 1
-                  if counts:
-                      print(f"- {node.get('name')}: " + ", ".join(f"{v} {k.lower()}" for k, v in sorted(counts.items())))
-              for child in node.get("children", []):
-                  walk(child)
-          if tree:
-              print("Per suite:\n")
-              for node in tree.get("testNodes", []):
-                  walk(node)
-              print()
-
-          for failure in summary.get("testFailures", []):
-              text = " ".join(str(failure.get("failureText", "")).split())[:500]
-              print(f"- FAILED {failure.get('targetName', '')}/{failure.get('testName', '')}: {text}")
-
-          print("\nScope: unsigned simulator build and unit tests only. No TestFlight, Apple account access, "
-                "UI tests, physical device or playback verification.")
+          print("Scope: ad-hoc signed simulator build; unit and UI tests in the tvOS Simulator. No TestFlight, "
+                "Apple account access, physical device, real Siri Remote or network playback.")
           PY
           echo "--- classification ---"
           cat "$CI_OUTPUT/classification.md"
+          if [ -f "$CI_OUTPUT/tvos-uitests.xcresult/Info.plist" ] && [ -f "$CI_OUTPUT/uitest.log" ]; then
+            echo "--- UI test results recorded by the tests ---"
+            grep -h "UITEST-RESULT" "$CI_OUTPUT/uitest.log" || echo "(none found in uitest.log)"
+          fi
 
       - name: Preserve diagnostic logs
         if: always()

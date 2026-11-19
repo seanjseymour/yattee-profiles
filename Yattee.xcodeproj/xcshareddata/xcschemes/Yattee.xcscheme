@@ -41,6 +41,17 @@
                ReferencedContainer = "container:Yattee.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "37E1A0000000000000000005"
+               BuildableName = "YatteeUITests.xctest"
+               BlueprintName = "YatteeUITests"
+               ReferencedContainer = "container:Yattee.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

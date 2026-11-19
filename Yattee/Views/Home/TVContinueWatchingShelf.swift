@@ -41,6 +41,10 @@ struct TVContinueWatchingShelf: View {
                 cards(entries)
             }
         }
+        // Lets UI tests scope a title check to this viewer's shelf (Bookmarks
+        // can show the same title). Accessibility only; no visual change.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.continueWatchingShelf")
     }
 
     private func cards(_ items: [WatchEntry]) -> some View {
