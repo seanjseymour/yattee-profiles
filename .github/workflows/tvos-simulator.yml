@@ -176,8 +176,27 @@ jobs:
               --path "$CI_OUTPUT/tvos-uitests.xcresult" \
               --output-path "$CI_OUTPUT/ui-attachments" || echo "Attachment export failed"
           fi
-          xcrun simctl spawn "$SIM_UDID" log show --style compact --last 60m \
-            --predicate 'process == "Yattee"' 2>&1 | tail -n 30000 > "$CI_OUTPUT/app-simulator.log" || true
+          # Copy attachments to ui-screenshots/<test>/<NN>-<name>.<ext>, in time order.
+          python3 - <<'PY' || echo "Attachment renaming failed"
+          import json, os, shutil
+          root = os.path.join(os.environ["CI_OUTPUT"], "ui-attachments")
+          manifest = os.path.join(root, "manifest.json")
+          if os.path.exists(manifest):
+              for test in json.load(open(manifest)):
+                  name = test["testIdentifier"].split("/")[-1].replace("()", "")
+                  folder = os.path.join(os.environ["CI_OUTPUT"], "ui-screenshots", name)
+                  os.makedirs(folder, exist_ok=True)
+                  items = sorted(test.get("attachments", []), key=lambda a: a.get("timestamp", 0))
+                  for index, item in enumerate(items, 1):
+                      base = item["suggestedHumanReadableName"].split("_0_")[0]
+                      ext = os.path.splitext(item["exportedFileName"])[1]
+                      shutil.copy(os.path.join(root, item["exportedFileName"]),
+                                  os.path.join(folder, f"{index:02d}-{base}{ext}"))
+          PY
+          # The app's own log only (LoggingService and UITestMode), not XCTest's.
+          xcrun simctl spawn "$SIM_UDID" log show --style compact --info --debug --last 60m \
+            --predicate 'subsystem == "com.seanjseymour.yatteeprofiles" OR eventMessage CONTAINS "UITestMode"' \
+            2>&1 | tail -n 30000 > "$CI_OUTPUT/app-simulator.log" || true
 
       - name: Check UI test mode is absent from Release
         id: release_isolation

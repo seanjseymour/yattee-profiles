@@ -62,6 +62,9 @@ enum UITestMode {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
         UserDefaults.standard.removePersistentDomain(forName: suiteName)
+        // Debug builds send LoggingService output to os_log only when this is on;
+        // CI collects it from the simulator log.
+        UserDefaults.standard.set(true, forKey: "loggingEnabled")
         writeViewers()
         NSLog("UITestMode: prepared \(rootDirectory.path)")
     }()

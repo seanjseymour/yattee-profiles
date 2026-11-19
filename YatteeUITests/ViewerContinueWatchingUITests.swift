@@ -149,43 +149,65 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         record("player \(label): launcher visible during playback = \(app.buttons["viewerPicker.open"].exists); texts: \(visibleTexts())")
     }
 
-    /// Menu hides the controls first, then collapses the player.
+    /// Menu hides the controls first, then collapses the player. The views
+    /// under the player stay in the accessibility tree, so "back on Home" is
+    /// judged by where focus is, not by whether Home elements exist.
     private func backOutOfPlayer() {
-        let launcher = app.buttons["viewerPicker.open"]
-        for _ in 0..<3 {
+        for press in 1...3 {
             remote.press(.menu)
-            if launcher.waitForExistence(timeout: 3) {
-                sleep(2)
+            sleep(3)
+            if homeHasFocus() {
+                record("left the player after \(press) Menu press(es); focus: \(focusedDescription())")
                 return
             }
         }
         XCTFail("Could not leave the player with Menu; focus: \(focusedDescription())")
     }
 
-    /// Left into the sidebar, then up to the Now Playing item at its top.
+    /// Sidebar tabs are buttons identified by their SF Symbol. Now Playing
+    /// (`play.circle.fill`) is listed only while a collapsed player has a video.
     private func openNowPlayingFromSidebar() -> Bool {
-        for _ in 0..<8 {
-            remote.press(.left)
-            usleep(700_000)
-            let focus = focused
-            if focus.exists, focus.frame.minX < 500 { break }
+        let item = app.buttons["play.circle.fill"]
+        guard item.waitForExistence(timeout: 5) else {
+            record("Now Playing is not in the sidebar")
+            return false
         }
-        checkpoint("sidebar-open")
-        for _ in 0..<12 {
-            let focus = focused
-            if focus.exists, focus.label.contains(clipTitle), focus.frame.minX < 500 {
-                remote.press(.select)
-                return true
-            }
-            remote.press(.up)
-            usleep(600_000)
+        var reached = moveFocus(to: item, trying: [.left, .up])
+        if !reached, !sidebarHasFocus() {
+            // Fallback: Menu from tab content moves focus to the sidebar.
+            remote.press(.menu)
+            sleep(1)
+            reached = moveFocus(to: item, trying: [.up, .down])
         }
-        return false
+        checkpoint("sidebar-nowPlaying-focused")
+        guard reached else {
+            record("could not focus Now Playing; focus: \(focusedDescription())")
+            return false
+        }
+        remote.press(.select)
+        return true
     }
 
     // MARK: - Helpers
 
     private var shelf: XCUIElement { app.otherElements["home.continueWatchingShelf"] }
+
+    private let sidebarSymbols: Set<String> = ["play.circle.fill", "magnifyingglass", "house.fill",
+                                               "arrow.down.circle", "server.rack", "gear",
+                                               "antenna.radiowaves.left.and.right", "play.circle"]
+
+    private func sidebarHasFocus() -> Bool {
+        let focus = focused
+        return focus.exists && sidebarSymbols.contains(focus.identifier)
+    }
+
+    /// Focus is on Home or a tab root, not inside the player.
+    private func homeHasFocus() -> Bool {
+        let focus = focused
+        guard focus.exists else { return false }
+        if focus.identifier == "viewerPicker.open" || sidebarSymbols.contains(focus.identifier) { return true }
+        return [clipTitle, seededTitle, "Resume", "Browse sources"].contains { focus.label.contains($0) }
+    }
 
     private var focused: XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
