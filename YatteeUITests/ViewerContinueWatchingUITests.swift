@@ -190,15 +190,15 @@ final class ViewerContinueWatchingUITests: XCTestCase {
             return false
         }
         checkpoint("sidebar-open")
-        var trail: [String] = []
-        for _ in 0..<8 where !item.hasFocus {
+        var trail: [String] = [focusedDescription()]
+        for _ in 0..<8 where focusedSidebarSymbol() != "play.circle.fill" {
             remote.press(.up)
             sleep(1)
             trail.append(focusedDescription())
         }
         record("sidebar Up trail: \(trail); Now Playing enabled=\(item.isEnabled) frame=\(item.frame)")
         checkpoint("sidebar-nowPlaying-attempt")
-        guard item.hasFocus else { return false }
+        guard focusedSidebarSymbol() == "play.circle.fill" else { return false }
         remote.press(.select)
         return true
     }
@@ -211,16 +211,26 @@ final class ViewerContinueWatchingUITests: XCTestCase {
                                                "arrow.down.circle", "server.rack", "gear",
                                                "antenna.radiowaves.left.and.right", "play.circle"]
 
-    private func sidebarHasFocus() -> Bool {
+    /// The sidebar symbol of the focused row. Focus lands on the row's cell;
+    /// the symbol-named button (the tab) is inside it.
+    private func focusedSidebarSymbol() -> String? {
         let focus = focused
-        return focus.exists && sidebarSymbols.contains(focus.identifier)
+        guard focus.exists else { return nil }
+        if sidebarSymbols.contains(focus.identifier) { return focus.identifier }
+        for query in [focus.buttons, focus.images] {
+            let match = query.matching(NSPredicate(format: "identifier IN %@", Array(sidebarSymbols))).firstMatch
+            if match.exists { return match.identifier }
+        }
+        return nil
     }
+
+    private func sidebarHasFocus() -> Bool { focusedSidebarSymbol() != nil }
 
     /// Focus is on Home or a tab root, not inside the player.
     private func homeHasFocus() -> Bool {
         let focus = focused
         guard focus.exists else { return false }
-        if focus.identifier == "viewerPicker.open" || sidebarSymbols.contains(focus.identifier) { return true }
+        if focus.identifier == "viewerPicker.open" || sidebarHasFocus() { return true }
         return [clipTitle, seededTitle, "Resume", "Browse sources"].contains { focus.label.contains($0) }
     }
 
@@ -237,7 +247,8 @@ final class ViewerContinueWatchingUITests: XCTestCase {
     private func focusedDescription() -> String {
         let focus = focused
         guard focus.exists else { return "none" }
-        return "type=\(focus.elementType.rawValue) id='\(focus.identifier)' label='\(focus.label)' x=\(Int(focus.frame.minX))"
+        let symbol = focusedSidebarSymbol().map { " sidebar=\($0)" } ?? ""
+        return "type=\(focus.elementType.rawValue) id='\(focus.identifier)' label='\(focus.label)' x=\(Int(focus.frame.minX)) y=\(Int(focus.frame.minY))\(symbol)"
     }
 
     private func shelfTexts() -> [String] {
