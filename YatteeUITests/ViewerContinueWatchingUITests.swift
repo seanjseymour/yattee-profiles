@@ -165,25 +165,40 @@ final class ViewerContinueWatchingUITests: XCTestCase {
     }
 
     /// Sidebar tabs are buttons identified by their SF Symbol. Now Playing
-    /// (`play.circle.fill`) is listed only while a collapsed player has a video.
+    /// (`play.circle.fill`) is listed above Search only while a collapsed
+    /// player has a video. Left from content opens the sidebar; Left inside it
+    /// closes it again, and Menu at the Home root leaves the app, so neither
+    /// is pressed once the sidebar has focus.
     private func openNowPlayingFromSidebar() -> Bool {
         let item = app.buttons["play.circle.fill"]
         guard item.waitForExistence(timeout: 5) else {
             record("Now Playing is not in the sidebar")
             return false
         }
-        var reached = moveFocus(to: item, trying: [.left, .up])
-        if !reached, !sidebarHasFocus() {
-            // Fallback: Menu from tab content moves focus to the sidebar.
-            remote.press(.menu)
+        // Left from the bookmark card does not reach the sidebar; Left from the
+        // row above it ("Browse sources" or the shelf) does. Alternate.
+        for _ in 0..<6 where !sidebarHasFocus() {
+            remote.press(.left)
             sleep(1)
-            reached = moveFocus(to: item, trying: [.up, .down])
+            if !sidebarHasFocus() {
+                remote.press(.up)
+                sleep(1)
+            }
         }
-        checkpoint("sidebar-nowPlaying-focused")
-        guard reached else {
-            record("could not focus Now Playing; focus: \(focusedDescription())")
+        guard sidebarHasFocus() else {
+            record("Left did not open the sidebar; focus: \(focusedDescription())")
             return false
         }
+        checkpoint("sidebar-open")
+        var trail: [String] = []
+        for _ in 0..<8 where !item.hasFocus {
+            remote.press(.up)
+            sleep(1)
+            trail.append(focusedDescription())
+        }
+        record("sidebar Up trail: \(trail); Now Playing enabled=\(item.isEnabled) frame=\(item.frame)")
+        checkpoint("sidebar-nowPlaying-attempt")
+        guard item.hasFocus else { return false }
         remote.press(.select)
         return true
     }
