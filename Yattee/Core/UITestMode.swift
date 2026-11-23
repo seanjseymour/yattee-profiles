@@ -105,6 +105,10 @@ enum UITestMode {
     @MainActor
     static func configure(_ environment: AppEnvironment) {
         let settings = environment.settingsManager
+        // No first-launch "Enable iCloud sync" prompt: on a device or simulator
+        // signed in to iCloud, one Select on it would upload the fake data.
+        // (iCloud sync is also forced off in test mode; see iCloudSyncEnabled.)
+        settings.onboardingCompleted = true
         // Select plays (no info screen) and never opens the queue sheet.
         settings.tvOSVideoTapAction = .playVideo
         settings.queueEnabled = false

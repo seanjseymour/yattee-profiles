@@ -157,6 +157,10 @@ extension SettingsManager {
     /// Default is false (disabled).
     var iCloudSyncEnabled: Bool {
         get {
+            #if DEBUG && os(tvOS)
+            // UI test mode: no settings, bookmarks or history leave the device.
+            if UITestMode.isActive { return false }
+            #endif
             if let cached = _iCloudSyncEnabled { return cached }
             // Only check local defaults for this setting - it should not sync to iCloud
             return localDefaults.bool(forKey: "iCloudSyncEnabled")

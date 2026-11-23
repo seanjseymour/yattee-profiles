@@ -19,6 +19,10 @@ enum CloudKitAvailability {
     /// an embedded profile (App Store, TestFlight, simulator) always carry the
     /// correct entitlements and are treated as available.
     static let isAvailable: Bool = {
+        #if DEBUG && os(tvOS)
+        // The UI test mode's fake data must never reach a signed-in iCloud account.
+        if UITestMode.isActive { return false }
+        #endif
         guard let entitlements = embeddedProvisioningEntitlements() else {
             return true
         }
