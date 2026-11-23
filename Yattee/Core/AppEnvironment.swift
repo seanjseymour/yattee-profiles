@@ -761,6 +761,7 @@ final class AppEnvironment {
         queueManager.clearQueue()
         playerService.stop()
         navigationCoordinator.isPlayerExpanded = false
+        LoggingService.shared.logPlayer("Viewer switched: playback closed, current video \(playerService.state.currentVideo == nil ? "cleared" : "STILL SET")")
     }
     #endif
 

@@ -80,15 +80,21 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(10) { self.contains(self.shelf, self.clipTitle) },
                       "Setup: A's shelf does not show the clip A played; shelf texts: \(shelfTexts())")
         record("symbol buttons before switch: \(playCircleButtons())")
-        XCTAssertTrue(nowPlayingItem.exists,
-                      "Setup: no Now Playing item for the clip while A's player is collapsed; \(playCircleButtons())")
+        // Positive control for the sidebar check used after the switch.
+        XCTAssertTrue(nowPlayingReachableInSidebar(),
+                      "Setup: focus cannot reach Now Playing while A's player is collapsed; \(playCircleButtons())")
+        XCTAssertTrue(waitUntil(10) { self.contains(self.shelf, self.clipTitle) }, "Setup: shelf not visible after the sidebar check")
         let beforeSwitch = clipRemainingSeconds()
         checkpoint("home-A-before-switch")
         record("step 1: A before switch: clip remaining=\(beforeSwitch.map(String.init) ?? "nil")s; shelf texts: \(shelfTexts())")
         XCTAssertNotNil(beforeSwitch, "Setup: could not read A's remaining time for the clip")
 
         switchViewer(to: viewerB, name: "B")
-        let nowPlayingGone = nowPlayingItem.waitForNonExistence(timeout: 5)
+        // The collapsed sidebar can keep a zero-size cell for a removed tab in
+        // the accessibility tree, so judge by what focus can reach: open the
+        // sidebar and climb it to the top.
+        sleep(2)
+        let nowPlayingGone = !nowPlayingReachableInSidebar()
         record("symbol buttons after switch: \(playCircleButtons())")
         let bShelfEmpty = !contains(shelf, clipTitle)
         checkpoint("home-B-after-switch")
@@ -98,7 +104,7 @@ final class ViewerContinueWatchingUITests: XCTestCase {
 
         // With the old behaviour A's player kept saving in the background here.
         sleep(30)
-        let stillGone = !nowPlayingItem.exists && !contains(shelf, clipTitle)
+        let stillGone = !nowPlayingReachableInSidebar() && !contains(shelf, clipTitle)
         checkpoint("home-B-after-30s")
         record("step 3: B after 30 s: Now Playing absent and B's shelf empty = \(stillGone)")
         XCTAssertTrue(stillGone, "Now Playing or the clip came back on B's Home")
@@ -182,6 +188,39 @@ final class ViewerContinueWatchingUITests: XCTestCase {
             }
         }
         XCTFail("Could not leave the player with Menu; focus: \(focusedDescription())")
+    }
+
+    /// Opens the sidebar (Left from content; Up when Left does not reach it),
+    /// climbs it with Up and reports whether focus landed on Now Playing.
+    /// Leaves with Right, never Menu (Menu at the Home root leaves the app).
+    private func nowPlayingReachableInSidebar() -> Bool {
+        for _ in 0..<6 where !sidebarHasFocus() {
+            remote.press(.left)
+            sleep(1)
+            if !sidebarHasFocus() {
+                remote.press(.up)
+                sleep(1)
+            }
+        }
+        guard sidebarHasFocus() else {
+            XCTFail("Left did not open the sidebar; focus: \(focusedDescription())")
+            return false
+        }
+        var trail: [String] = [focusedSidebarSymbol() ?? "?"]
+        var reached = focusedSidebarSymbol() == "play.circle.fill"
+        for _ in 0..<8 where !reached {
+            let before = focusedDescription()
+            remote.press(.up)
+            sleep(1)
+            trail.append(focusedSidebarSymbol() ?? "?")
+            reached = focusedSidebarSymbol() == "play.circle.fill"
+            if focusedDescription() == before { break }
+        }
+        checkpoint("sidebar-top")
+        record("sidebar Up trail: \(trail); Now Playing reached = \(reached); visible item frame=\(nowPlayingItem.exists ? "\(nowPlayingItem.frame)" : "none")")
+        remote.press(.right)
+        sleep(2)
+        return reached
     }
 
     // MARK: - Helpers
