@@ -734,12 +734,35 @@ final class AppEnvironment {
         }
         #endif
 
+        #if os(tvOS)
+        // A viewer switch ends the previous viewer's playback (Sean, 2026-11-20).
+        viewerProfilesManager.onViewerSwitch = { [weak self] _, _ in
+            self?.closePlaybackForViewerSwitch()
+        }
+        #endif
+
         #if DEBUG && os(tvOS)
         if UITestMode.isActive {
             UITestMode.configure(self)
         }
         #endif
     }
+
+    #if os(tvOS)
+    /// Same as closing the video from the player: stop() saves the last position
+    /// under the session's own viewer (the previous one; its write permit is
+    /// independent of the new selection), then tears down MPV, the session,
+    /// the system Now Playing info and remote commands. Clearing currentVideo
+    /// removes the sidebar's Now Playing item.
+    private func closePlaybackForViewerSwitch() {
+        guard playerService.state.currentVideo != nil else { return }
+        LoggingService.shared.logPlayer("Viewer switched: closing playback")
+        playerService.state.isClosingVideo = true
+        queueManager.clearQueue()
+        playerService.stop()
+        navigationCoordinator.isPlayerExpanded = false
+    }
+    #endif
 
     #if os(tvOS)
     /// Viewer profiles live in `.standard`, except in the Debug-only UI test

@@ -50,6 +50,10 @@ final class ViewerProfilesManager {
     private(set) var profiles: [ViewerProfile]
     private(set) var activeViewerID: UUID
     private(set) var storageUnavailable = false
+    /// Called once per real switch, after the new selection is saved and before
+    /// `viewerDidChange` is posted, so the old viewer's playback can be closed
+    /// before any screen reloads for the new viewer.
+    @ObservationIgnored var onViewerSwitch: (@MainActor (_ from: UUID, _ to: UUID) -> Void)?
 
     var activeViewer: ViewerProfile {
         profiles.first { $0.id == activeViewerID } ?? profiles[0]
@@ -108,7 +112,9 @@ final class ViewerProfilesManager {
 
     func select(id: UUID) throws {
         guard profiles.contains(where: { $0.id == id }) else { throw ViewerProfileError.missingViewer }
+        let previous = activeViewerID
         try commit(profiles: profiles, activeID: id)
+        if previous != id { onViewerSwitch?(previous, id) }
         NotificationCenter.default.post(name: .viewerDidChange, object: nil)
         NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
     }

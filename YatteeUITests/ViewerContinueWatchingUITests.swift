@@ -69,42 +69,60 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         XCTAssertTrue(shown, "B's shelf does not show the clip B just played (symptom 2)")
     }
 
-    /// 2b: play as A, Menu out, switch to B, resume via Now Playing, Menu out.
-    /// Documents where the progress lands; correctness is Sean's decision.
-    func testNowPlayingAfterSwitchSavesToNewViewer() {
+    /// 2b fix (Sean, 2026-11-20): a viewer switch stops the player. A plays,
+    /// Menu out (playback continues in the background), switch to B. B gets no
+    /// Now Playing item and an empty shelf; A's progress stops where the switch
+    /// saved it.
+    func testViewerSwitchStopsPlayer() {
         launch()
         playClipFromBookmarks(seconds: 15, label: "A")
         backOutOfPlayer()
-        let aAfterPlay = waitUntil(10) { self.contains(self.shelf, self.clipTitle) }
-        checkpoint("home-A-after-playback")
-        record("step 1: A's shelf \(aAfterPlay ? "shows" : "does NOT show") the clip; shelf texts: \(shelfTexts())")
+        XCTAssertTrue(waitUntil(10) { self.contains(self.shelf, self.clipTitle) },
+                      "Setup: A's shelf does not show the clip A played; shelf texts: \(shelfTexts())")
+        XCTAssertTrue(app.buttons["play.circle.fill"].exists,
+                      "Setup: no Now Playing item while A's player is collapsed")
+        let beforeSwitch = clipRemainingSeconds()
+        checkpoint("home-A-before-switch")
+        record("step 1: A before switch: clip remaining=\(beforeSwitch.map(String.init) ?? "nil")s; shelf texts: \(shelfTexts())")
+        XCTAssertNotNil(beforeSwitch, "Setup: could not read A's remaining time for the clip")
 
         switchViewer(to: viewerB, name: "B")
-        let bBeforeResume = contains(shelf, clipTitle)
-        checkpoint("home-B-before-resume")
-        record("step 2: after switch, B's shelf \(bBeforeResume ? "shows" : "does not show") the clip")
+        let nowPlayingGone = app.buttons["play.circle.fill"].waitForNonExistence(timeout: 5)
+        let bShelfEmpty = !contains(shelf, clipTitle)
+        checkpoint("home-B-after-switch")
+        record("step 2: after switch to B: Now Playing \(nowPlayingGone ? "gone" : "STILL shown"), B's shelf \(bShelfEmpty ? "has no clip" : "SHOWS the clip"); shelf texts: \(shelfTexts())")
+        XCTAssertTrue(nowPlayingGone, "Now Playing still offers A's video to B after the switch")
+        XCTAssertTrue(bShelfEmpty, "B's shelf shows the clip only A played")
 
-        XCTAssertTrue(openNowPlayingFromSidebar(), "Could not reach Now Playing in the sidebar; focus: \(focusedDescription())")
-        sleep(15)
-        checkpoint("player-B-resumed")
-        backOutOfPlayer()
-        let bAfterResume = waitUntil(10) { self.contains(self.shelf, self.clipTitle) }
-        checkpoint("home-B-after-resume")
-        record("step 3: after resume as B, B's shelf \(bAfterResume ? "shows" : "does NOT show") the clip; shelf texts: \(shelfTexts())")
+        // With the old behaviour A's player kept saving in the background here.
+        sleep(30)
+        let stillGone = !app.buttons["play.circle.fill"].exists && !contains(shelf, clipTitle)
+        checkpoint("home-B-after-30s")
+        record("step 3: B after 30 s: Now Playing absent and B's shelf empty = \(stillGone)")
+        XCTAssertTrue(stillGone, "Now Playing or the clip came back on B's Home")
 
         switchViewer(to: viewerA, name: "A")
-        let aAtEnd = waitUntil(8) { self.contains(self.shelf, self.clipTitle) }
-        checkpoint("home-A-at-end")
-        record("step 4: A's shelf \(aAtEnd ? "shows" : "does not show") the clip; shelf texts: \(shelfTexts())")
+        XCTAssertTrue(waitUntil(8) { self.contains(self.shelf, self.clipTitle) },
+                      "A's shelf lost the clip; shelf texts: \(shelfTexts())")
+        let afterSwitch = clipRemainingSeconds()
+        checkpoint("home-A-after-switch-back")
+        sleep(10)
+        let settled = clipRemainingSeconds()
+        checkpoint("home-A-10s-later")
+        record("step 4: A remaining: before switch=\(beforeSwitch.map(String.init) ?? "nil")s, back on A=\(afterSwitch.map(String.init) ?? "nil")s, 10 s later=\(settled.map(String.init) ?? "nil")s")
 
-        let landed: String
-        switch (bAfterResume, aAtEnd) {
-        case (true, true): landed = "both A and B"
-        case (true, false): landed = "B only"
-        case (false, true): landed = "A only (2b)"
-        case (false, false): landed = "neither"
+        guard let beforeSwitch, let afterSwitch else {
+            return XCTFail("Could not read A's remaining time; shelf texts: \(shelfTexts())")
         }
-        record("RESULT nowPlaying: progress after the switch is visible for \(landed)")
+        // Between reading the shelf and the switch, A's collapsed player still
+        // plays, and the switch saves that last position (the periodic save
+        // runs every 5 s, the picker takes a few seconds). 15 s covers that;
+        // a player that survived the switch adds 30+ s on B's Home.
+        let drift = beforeSwitch - afterSwitch
+        record("RESULT stopOnSwitch: A's remaining time moved \(drift) s across the switch")
+        XCTAssertTrue((0...15).contains(drift),
+                      "A's remaining time moved \(drift) s across the switch (expected 0–15 s, the switch's final save)")
+        XCTAssertEqual(settled, afterSwitch, "A's progress still advances after the switch: the player was not stopped")
     }
 
     // MARK: - Steps
@@ -164,45 +182,6 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         XCTFail("Could not leave the player with Menu; focus: \(focusedDescription())")
     }
 
-    /// Sidebar tabs are buttons identified by their SF Symbol. Now Playing
-    /// (`play.circle.fill`) is listed above Search only while a collapsed
-    /// player has a video. Left from content opens the sidebar; Left inside it
-    /// closes it again, and Menu at the Home root leaves the app, so neither
-    /// is pressed once the sidebar has focus.
-    private func openNowPlayingFromSidebar() -> Bool {
-        let item = app.buttons["play.circle.fill"]
-        guard item.waitForExistence(timeout: 5) else {
-            record("Now Playing is not in the sidebar")
-            return false
-        }
-        // Left from the bookmark card does not reach the sidebar; Left from the
-        // row above it ("Browse sources" or the shelf) does. Alternate.
-        for _ in 0..<6 where !sidebarHasFocus() {
-            remote.press(.left)
-            sleep(1)
-            if !sidebarHasFocus() {
-                remote.press(.up)
-                sleep(1)
-            }
-        }
-        guard sidebarHasFocus() else {
-            record("Left did not open the sidebar; focus: \(focusedDescription())")
-            return false
-        }
-        checkpoint("sidebar-open")
-        var trail: [String] = [focusedDescription()]
-        for _ in 0..<8 where focusedSidebarSymbol() != "play.circle.fill" {
-            remote.press(.up)
-            sleep(1)
-            trail.append(focusedDescription())
-        }
-        record("sidebar Up trail: \(trail); Now Playing enabled=\(item.isEnabled) frame=\(item.frame)")
-        checkpoint("sidebar-nowPlaying-attempt")
-        guard focusedSidebarSymbol() == "play.circle.fill" else { return false }
-        remote.press(.select)
-        return true
-    }
-
     // MARK: - Helpers
 
     private var shelf: XCUIElement { app.otherElements["home.continueWatchingShelf"] }
@@ -249,6 +228,18 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         guard focus.exists else { return "none" }
         let symbol = focusedSidebarSymbol().map { " sidebar=\($0)" } ?? ""
         return "type=\(focus.elementType.rawValue) id='\(focus.identifier)' label='\(focus.label)' x=\(Int(focus.frame.minX)) y=\(Int(focus.frame.minY))\(symbol)"
+    }
+
+    /// Remaining seconds shown for the clip on the shelf ("9:40 remaining",
+    /// the first "remaining" text after the clip's title).
+    private func clipRemainingSeconds() -> Int? {
+        let texts = shelfTexts()
+        guard let index = texts.firstIndex(where: { $0.contains(clipTitle) }) else { return nil }
+        guard let text = texts[(index + 1)...].prefix(4).first(where: { $0.contains("remaining") }),
+              let clock = text.split(separator: " ").first else { return nil }
+        let parts = clock.split(separator: ":").compactMap { Int($0) }
+        guard (2...3).contains(parts.count) else { return nil }
+        return parts.reduce(0) { $0 * 60 + $1 }
     }
 
     private func shelfTexts() -> [String] {

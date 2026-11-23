@@ -123,4 +123,32 @@ struct ViewerProfilesTests {
             #expect(defaults.string(forKey: ViewerProfilesManager.storageKey) == "preserve me")
         }
     }
+
+    private final class EventLog: @unchecked Sendable { var events: [String] = [] }
+
+    @Test("A real switch reports old and new viewer once, before viewerDidChange")
+    func switchHookRunsBeforeNotification() throws {
+        try withDefaults { defaults in
+            let manager = ViewerProfilesManager(defaults: defaults)
+            let a = manager.activeViewerID
+            let b = try manager.add(name: "B").id
+            let log = EventLog()
+            manager.onViewerSwitch = { from, to in
+                log.events.append("switch \(from == a ? "A" : "?")->\(to == b ? "B" : "?")")
+            }
+            let token = NotificationCenter.default.addObserver(forName: .viewerDidChange, object: nil, queue: nil) { _ in
+                log.events.append("viewerDidChange")
+            }
+            defer { NotificationCenter.default.removeObserver(token) }
+
+            try manager.select(id: b)
+            #expect(log.events == ["switch A->B", "viewerDidChange"])
+
+            // Re-selecting the active viewer and a refused selection are not switches.
+            log.events.removeAll()
+            try manager.select(id: b)
+            #expect(throws: ViewerProfileError.missingViewer) { try manager.select(id: UUID()) }
+            #expect(!log.events.contains { $0.hasPrefix("switch") })
+        }
+    }
 }
