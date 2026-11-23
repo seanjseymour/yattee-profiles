@@ -79,15 +79,17 @@ final class ViewerContinueWatchingUITests: XCTestCase {
         backOutOfPlayer()
         XCTAssertTrue(waitUntil(10) { self.contains(self.shelf, self.clipTitle) },
                       "Setup: A's shelf does not show the clip A played; shelf texts: \(shelfTexts())")
-        XCTAssertTrue(app.buttons["play.circle.fill"].exists,
-                      "Setup: no Now Playing item while A's player is collapsed")
+        record("symbol buttons before switch: \(playCircleButtons())")
+        XCTAssertTrue(nowPlayingItem.exists,
+                      "Setup: no Now Playing item for the clip while A's player is collapsed; \(playCircleButtons())")
         let beforeSwitch = clipRemainingSeconds()
         checkpoint("home-A-before-switch")
         record("step 1: A before switch: clip remaining=\(beforeSwitch.map(String.init) ?? "nil")s; shelf texts: \(shelfTexts())")
         XCTAssertNotNil(beforeSwitch, "Setup: could not read A's remaining time for the clip")
 
         switchViewer(to: viewerB, name: "B")
-        let nowPlayingGone = app.buttons["play.circle.fill"].waitForNonExistence(timeout: 5)
+        let nowPlayingGone = nowPlayingItem.waitForNonExistence(timeout: 5)
+        record("symbol buttons after switch: \(playCircleButtons())")
         let bShelfEmpty = !contains(shelf, clipTitle)
         checkpoint("home-B-after-switch")
         record("step 2: after switch to B: Now Playing \(nowPlayingGone ? "gone" : "STILL shown"), B's shelf \(bShelfEmpty ? "has no clip" : "SHOWS the clip"); shelf texts: \(shelfTexts())")
@@ -96,7 +98,7 @@ final class ViewerContinueWatchingUITests: XCTestCase {
 
         // With the old behaviour A's player kept saving in the background here.
         sleep(30)
-        let stillGone = !app.buttons["play.circle.fill"].exists && !contains(shelf, clipTitle)
+        let stillGone = !nowPlayingItem.exists && !contains(shelf, clipTitle)
         checkpoint("home-B-after-30s")
         record("step 3: B after 30 s: Now Playing absent and B's shelf empty = \(stillGone)")
         XCTAssertTrue(stillGone, "Now Playing or the clip came back on B's Home")
@@ -185,6 +187,18 @@ final class ViewerContinueWatchingUITests: XCTestCase {
     // MARK: - Helpers
 
     private var shelf: XCUIElement { app.otherElements["home.continueWatchingShelf"] }
+
+    /// The sidebar's Now Playing tab: symbol `play.circle.fill` and the playing
+    /// video's title. Home's Continue Watching shortcut uses the same symbol.
+    private var nowPlayingItem: XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@",
+                                         "play.circle.fill", clipTitle)).firstMatch
+    }
+
+    private func playCircleButtons() -> [String] {
+        app.buttons.matching(identifier: "play.circle.fill").allElementsBoundByIndex
+            .map { "'\($0.label)' x=\(Int($0.frame.minX)) y=\(Int($0.frame.minY))" }
+    }
 
     private let sidebarSymbols: Set<String> = ["play.circle.fill", "magnifyingglass", "house.fill",
                                                "arrow.down.circle", "server.rack", "gear",
