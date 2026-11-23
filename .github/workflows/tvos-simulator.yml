@@ -189,8 +189,8 @@ jobs:
                   items = sorted(test.get("attachments", []), key=lambda a: a.get("timestamp", 0))
                   for index, item in enumerate(items, 1):
                       base = item["suggestedHumanReadableName"].split("_0_")[0]
-            # upload-artifact rejects these characters (XCTest's failure debug descriptions use quotes).
-            base = "".join("_" if c in '"<>|*?:\\\r\n' else c for c in base)
+                      # upload-artifact rejects these characters (XCTest's failure debug descriptions use quotes).
+                      base = "".join("_" if c in '"<>|*?:\\\r\n' else c for c in base)
                       ext = os.path.splitext(item["exportedFileName"])[1]
                       shutil.copy(os.path.join(root, item["exportedFileName"]),
                                   os.path.join(folder, f"{index:02d}-{base}{ext}"))
